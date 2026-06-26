@@ -1,0 +1,16 @@
+:80 {
+	root * /site
+
+	@booking {
+		method POST
+		path /book
+	}
+	reverse_proxy @booking app:8000
+
+	@health {
+		path /health
+	}
+	reverse_proxy @health app:8000
+
+	file_server
+}

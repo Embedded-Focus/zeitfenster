@@ -1,0 +1,5 @@
+use flake "path:."
+PATH_add .venv/bin
+set -a
+eval $(sops --decrypt .env)
+set +a

@@ -1,0 +1,37 @@
+branding:
+  title: "Book a Meeting"
+  logo: "/static/logo.png"
+  colors:
+    primary: "#2563eb"
+    background: "#ffffff"
+
+availability:
+  calendars:
+    - url: https://radicale.example.com/user/family/
+      username: family-reader
+      password_env: FAMILY_PASSWORD
+
+    - url: https://radicale.example.com/user/work/
+      username: work-reader
+      password_env: WORK_PASSWORD
+
+rules:
+  timezone: Europe/Vienna
+  working_hours:
+    mon: ["09:00-17:00"]
+    tue: ["09:00-17:00"]
+    wed: ["09:00-17:00"]
+    thu: ["09:00-17:00"]
+    fri: ["09:00-16:00"]
+  slot_durations: [30m, 60m, 90m]
+  buffer: 15m
+  minimum_notice: 24h
+  horizon: 60d
+
+email:
+  owner: you@example.com
+  smtp_host_env: SMTP_HOST
+  smtp_port: 587
+  smtp_user_env: SMTP_USER
+  smtp_password_env: SMTP_PASSWORD
+  smtp_start_tls: true

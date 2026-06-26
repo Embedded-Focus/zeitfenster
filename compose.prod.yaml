@@ -1,0 +1,28 @@
+services:
+  caddy:
+    ports: !reset []
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.zeitfenster.rule=Host(`booking.example.com`)"
+      - "traefik.http.services.zeitfenster.loadbalancer.server.port=80"
+    networks:
+      - frontend
+      - traefik
+
+  app:
+    volumes:
+      - site-data:/site
+      - /etc/zeitfenster/config.yaml:/etc/zeitfenster/config.yaml:ro
+    env_file:
+      - .env
+    depends_on: !reset []
+    networks:
+      - frontend
+      - backend
+
+  radicale: !reset null
+  mailpit: !reset null
+
+networks:
+  traefik:
+    external: true

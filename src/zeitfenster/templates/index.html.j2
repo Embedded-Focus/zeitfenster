@@ -1,0 +1,120 @@
+{% extends "base.html.j2" %}
+
+{% block content %}
+<hgroup>
+    <h1>{{ branding.title }}</h1>
+    <p>Select a duration and pick a time that works for you.</p>
+</hgroup>
+
+{% if slots_by_duration %}
+{% set duration_colors = ["#4a90d9", "#5ba870", "#d4833e"] %}
+{% set duration_pastels = ["#dbeafe", "#d1fae5", "#ffedd5"] %}
+<div class="duration-tabs" role="group">
+    {% for duration in slots_by_duration %}
+    <button class="duration-tab{% if loop.first %} active{% endif %}"
+            data-duration="{{ duration }}"
+            style="--duration-color: {{ duration_colors[(loop.index0) % duration_colors|length] }}; --duration-pastel: {{ duration_pastels[(loop.index0) % duration_pastels|length] }}"
+            onclick="showDuration('{{ duration }}')">{{ duration }}</button>
+    {% endfor %}
+</div>
+
+{% for duration, days in slots_by_duration.items() %}
+<div class="slot-list" id="slots-{{ duration }}"
+     style="--duration-color: {{ duration_colors[(loop.index0) % duration_colors|length] }}; --duration-pastel: {{ duration_pastels[(loop.index0) % duration_pastels|length] }}"
+     {% if not loop.first %} hidden{% endif %}>
+    {% if days %}
+    {% for day_label, day_slots in days.items() %}
+    <article>
+        <header>{{ day_label }}</header>
+        <div class="grid slot-grid">
+            {% for slot in day_slots %}
+            <form method="post" action="/book">
+                <input type="hidden" name="slot_start" value="{{ slot.start_iso }}">
+                <input type="hidden" name="slot_end" value="{{ slot.end_iso }}">
+                <input type="hidden" name="duration" value="{{ duration }}">
+                <input type="hidden" name="website" value="">
+                <button type="button" class="outline slot-button"
+                        onclick="this.closest('article').querySelector('.booking-form') ? toggleForm(this) : insertForm(this)">
+                    {{ slot.start_time }} – {{ slot.end_time }}
+                </button>
+            </form>
+            {% endfor %}
+        </div>
+    </article>
+    {% endfor %}
+    {% else %}
+    <article>
+        <p>No available slots for this duration.</p>
+    </article>
+    {% endif %}
+</div>
+{% endfor %}
+
+{% else %}
+<article>
+    <p>No available slots at this time. Please check back later.</p>
+</article>
+{% endif %}
+
+<template id="booking-form-template">
+    <div class="booking-form">
+        <hr>
+        <h4>Book this slot</h4>
+        <label for="bf-name">Name
+            <input type="text" id="bf-name" name="name" required placeholder="Your name">
+        </label>
+        <label for="bf-email">Email
+            <input type="email" id="bf-email" name="email" required placeholder="your@email.com">
+        </label>
+        <button type="submit">Confirm Booking</button>
+    </div>
+</template>
+
+<script>
+function showDuration(duration) {
+    document.querySelectorAll('.slot-list').forEach(function(el) {
+        el.hidden = true;
+    });
+    document.querySelectorAll('.duration-tab').forEach(function(el) {
+        el.classList.remove('active');
+    });
+    document.getElementById('slots-' + duration).hidden = false;
+    document.querySelector('[data-duration="' + duration + '"]').classList.add('active');
+}
+
+function insertForm(button) {
+    document.querySelectorAll('.booking-form').forEach(function(el) {
+        el.remove();
+    });
+    document.querySelectorAll('.slot-button').forEach(function(el) {
+        el.classList.remove('contrast');
+        el.classList.add('outline');
+    });
+    var form = button.closest('form');
+    var template = document.getElementById('booking-form-template');
+    var clone = template.content.cloneNode(true);
+    var nameInput = clone.querySelector('#bf-name');
+    var emailInput = clone.querySelector('#bf-email');
+    nameInput.removeAttribute('id');
+    emailInput.removeAttribute('id');
+    nameInput.setAttribute('name', 'name');
+    emailInput.setAttribute('name', 'email');
+    form.appendChild(clone);
+    button.classList.remove('outline');
+    button.classList.add('contrast');
+    form.querySelector('input[name="name"]').focus();
+}
+
+function toggleForm(button) {
+    var form = button.closest('form');
+    var bookingForm = form.querySelector('.booking-form');
+    if (bookingForm) {
+        bookingForm.remove();
+        button.classList.remove('contrast');
+        button.classList.add('outline');
+    } else {
+        insertForm(button);
+    }
+}
+</script>
+{% endblock %}

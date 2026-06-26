@@ -1,0 +1,36 @@
+branding:
+  title: "Book a Meeting with Jane Doe"
+  colors:
+    primary: "#0d6efd"
+    background: "#ffffff"
+
+availability:
+  calendars:
+    - url: http://radicale:5232/reader/work/
+      username: reader
+      password_env: CALDAV_PASSWORD
+
+    - url: http://radicale:5232/reader/personal/
+      username: reader
+      password_env: CALDAV_PASSWORD
+
+rules:
+  timezone: Europe/Vienna
+  working_hours:
+    mon: ["09:00-17:00"]
+    tue: ["09:00-17:00"]
+    wed: ["09:00-17:00"]
+    thu: ["09:00-17:00"]
+    fri: ["09:00-16:00"]
+  slot_durations: [30m, 60m, 90m]
+  buffer: 15m
+  minimum_notice: 24h
+  horizon: 60d
+
+email:
+  owner: jane.doe@example.com
+  smtp_host_env: SMTP_HOST
+  smtp_port: 1025
+  smtp_user_env: SMTP_USER
+  smtp_password_env: SMTP_PASSWORD
+  smtp_start_tls: false

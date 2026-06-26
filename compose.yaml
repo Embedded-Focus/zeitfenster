@@ -1,0 +1,70 @@
+services:
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - site-data:/site:ro
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - app
+    networks:
+      - frontend
+
+  app:
+    build: .
+    volumes:
+      - site-data:/site
+      - ./demo/config.yaml:/etc/zeitfenster/config.yaml:ro
+    env_file:
+      - ./demo/.env
+    depends_on:
+      init-calendars:
+        condition: service_completed_successfully
+      mailpit:
+        condition: service_started
+    networks:
+      - frontend
+      - backend
+    expose:
+      - "8000"
+
+  radicale:
+    image: tomsquest/docker-radicale:latest
+    volumes:
+      - ./demo/radicale/config:/config/config:ro
+      - ./demo/radicale/users:/config/users:ro
+      - radicale-data:/data
+    networks:
+      - backend
+    expose:
+      - "5232"
+
+  init-calendars:
+    image: curlimages/curl:latest
+    volumes:
+      - ./demo/init-calendars.sh:/init-calendars.sh:ro
+    entrypoint: ["/bin/sh", "/init-calendars.sh"]
+    depends_on:
+      - radicale
+    networks:
+      - backend
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "8025:8025"
+    networks:
+      - frontend
+      - backend
+    expose:
+      - "1025"
+
+volumes:
+  site-data:
+  radicale-data:
+
+networks:
+  frontend:
+  backend:
+    internal: true

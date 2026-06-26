@@ -1,0 +1,44 @@
+[project]
+name = "zeitfenster"
+version = "0.1.0"
+description = "Minimal, self-hosted appointment booking service using CalDAV"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.14"
+dependencies = [
+    "aiosmtplib",
+    "caldav",
+    "fastapi",
+    "icalendar",
+    "jinja2",
+    "pydantic",
+    "python-multipart",
+    "pyyaml",
+    "recurring-ical-events",
+    "structlog",
+    "uvicorn[standard]",
+]
+
+[dependency-groups]
+dev = [
+    "httpx2",
+    "pre-commit>=4.6.0",
+    "pytest",
+    "pytest-asyncio",
+    "ruff>=0.15.20",
+    "ty>=0.0.54",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/zeitfenster"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[[tool.ty.overrides]]
+include = ["src/zeitfenster/caldav_client.py"]
+rules = { invalid-type-form = "ignore", call-non-callable = "ignore" }

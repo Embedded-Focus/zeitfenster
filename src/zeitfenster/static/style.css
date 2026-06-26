@@ -1,0 +1,65 @@
+.logo {
+    height: 2rem;
+    margin-right: 0.5rem;
+    vertical-align: middle;
+}
+
+.duration-tabs {
+    margin-bottom: 1.5rem;
+    border: none;
+    box-shadow: none;
+    outline: none;
+}
+
+.duration-tab {
+    --pico-border-color: var(--duration-color);
+    --pico-color: var(--duration-color);
+    --pico-background-color: transparent;
+}
+
+.duration-tab:focus:not(:focus-visible) {
+    outline: none;
+    box-shadow: none;
+    --pico-box-shadow: none;
+}
+
+.duration-tab.active {
+    --pico-background-color: var(--duration-pastel);
+    --pico-color: var(--duration-color);
+    --pico-border-color: var(--duration-color);
+    font-weight: 700;
+}
+
+.slot-grid {
+    grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+    gap: 0.5rem;
+}
+
+.slot-button {
+    width: 100%;
+    margin-bottom: 0;
+    --pico-border-color: var(--duration-color);
+    --pico-color: var(--duration-color);
+    --pico-background-color: transparent;
+}
+
+.slot-button:hover {
+    --pico-background-color: var(--duration-pastel);
+}
+
+.slot-button.contrast {
+    --pico-background-color: var(--duration-pastel);
+    --pico-border-color: var(--duration-color);
+    --pico-color: var(--duration-color);
+    font-weight: 700;
+}
+
+.booking-form {
+    margin-top: 1rem;
+}
+
+footer {
+    text-align: center;
+    padding: 2rem 0;
+    opacity: 0.6;
+}
