@@ -54,6 +54,13 @@
     font-weight: 700;
 }
 
+.honeypot {
+    position: absolute;
+    left: -9999px;
+    height: 0;
+    overflow: hidden;
+}
+
 .booking-form {
     margin-top: 1rem;
 }

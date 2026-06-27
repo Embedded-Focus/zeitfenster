@@ -32,7 +32,7 @@
                 <input type="hidden" name="slot_start" value="{{ slot.start_iso }}">
                 <input type="hidden" name="slot_end" value="{{ slot.end_iso }}">
                 <input type="hidden" name="duration" value="{{ duration }}">
-                <input type="hidden" name="website" value="">
+                <input type="text" name="website" value="" class="honeypot" tabindex="-1" autocomplete="off">
                 <button type="button" class="outline slot-button"
                         onclick="this.closest('article').querySelector('.booking-form') ? toggleForm(this) : insertForm(this)">
                     {{ slot.start_time }} – {{ slot.end_time }}
