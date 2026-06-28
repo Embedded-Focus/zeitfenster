@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv run pytest*)",
+      "Bash(uv run ruff*)",
+      "Bash(uv run ty*)",
+      "Bash(uv run python*)",
+      "Bash(uv sync*)",
+      "Bash(uv pip*)",
+      "Bash(uv run pre-commit*)",
+      "Bash(make *)",
+      "Bash(find *)",
+      "Bash(git status*)",
+      "Bash(git log*)",
+      "Bash(git diff*)",
+      "Bash(git branch*)",
+      "Bash(ls *)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /workspace && uv run pre-commit run --all-files 2>/dev/null || true",
+            "timeout": 60,
+            "statusMessage": "Running pre-commit hooks..."
+          }
+        ]
+      }
+    ]
+  }
+}
