@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 
 from zeitfenster.caldav_client import BusyInterval, fetch_busy_intervals
 from zeitfenster.config import AppConfig, WorkingHours
+from zeitfenster.ics_client import fetch_busy_intervals_ics
 from zeitfenster.parsing import parse_duration, parse_time_range
 
 _WEEKDAY_ATTRS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
@@ -148,6 +149,9 @@ def fetch_and_compute(config: AppConfig) -> dict[str, list[FreeSlot]]:
     all_busy: list[BusyInterval] = []
     for source in config.availability.calendars:
         intervals = fetch_busy_intervals(source, range_start, range_end)
+        all_busy.extend(intervals)
+    for source in config.availability.ics_urls:
+        intervals = fetch_busy_intervals_ics(source, range_start, range_end)
         all_busy.extend(intervals)
 
     return compute_free_slots(all_busy, config)

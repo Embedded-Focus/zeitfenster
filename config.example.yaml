@@ -15,6 +15,11 @@ availability:
       username: work-reader
       password_env: WORK_PASSWORD
 
+  # Read-only ICS URLs (e.g. Google Calendar "secret address in iCal format")
+  # Google Calendar: Settings > pick calendar > "Secret address in iCal format"
+  ics_urls:
+    - url: https://calendar.google.com/calendar/ical/your-calendar-id%40group.calendar.google.com/private-abc123/basic.ics
+
 rules:
   timezone: Europe/Vienna
   working_hours:

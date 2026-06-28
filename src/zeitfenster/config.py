@@ -32,8 +32,13 @@ class CalendarSource(BaseModel):
         return value
 
 
+class IcsUrlSource(BaseModel):
+    url: str
+
+
 class Availability(BaseModel):
     calendars: list[CalendarSource] = []
+    ics_urls: list[IcsUrlSource] = []
 
 
 class WorkingHours(BaseModel):

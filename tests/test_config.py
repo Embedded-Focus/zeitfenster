@@ -28,6 +28,8 @@ availability:
     - url: https://caldav.example.com/cal2/
       username: reader2
       password_env: CAL2_PASSWORD
+  ics_urls:
+    - url: https://calendar.google.com/calendar/ical/test/basic.ics
 
 rules:
   timezone: Europe/Vienna
@@ -84,6 +86,11 @@ class TestFullConfig:
                 cfg.availability.calendars[0].url == "https://caldav.example.com/cal1/"
             )
             assert cfg.availability.calendars[0].username == "reader1"
+            assert len(cfg.availability.ics_urls) == 1
+            assert (
+                cfg.availability.ics_urls[0].url
+                == "https://calendar.google.com/calendar/ical/test/basic.ics"
+            )
             assert cfg.rules.timezone == "Europe/Vienna"
             assert cfg.rules.working_hours.mon == ["09:00-12:00", "13:00-17:00"]
             assert cfg.rules.working_hours.sat == []
