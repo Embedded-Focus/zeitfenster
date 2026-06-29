@@ -3,8 +3,10 @@ from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 from zeitfenster.availability import (
+    FreeSlot,
     apply_buffer,
     compute_free_slots,
+    intersect_free_slots,
     merge_intervals,
 )
 from zeitfenster.caldav_client import BusyInterval
@@ -245,3 +247,77 @@ class TestComputeFreeSlots:
             result = compute_free_slots([], config)
 
         assert result["60m"] == []
+
+
+def _slot(hour: int, minute: int, duration_minutes: int) -> FreeSlot:
+    start = _dt(2026, 7, 1, hour, minute)
+    return FreeSlot(
+        start=start,
+        end=start + timedelta(minutes=duration_minutes),
+        duration=timedelta(minutes=duration_minutes),
+    )
+
+
+class TestIntersectFreeSlots:
+    def test_empty_input(self):
+        assert intersect_free_slots([]) == {}
+
+    def test_single_set_unchanged(self):
+        slots = {"60m": [_slot(9, 0, 60), _slot(10, 0, 60)]}
+        result = intersect_free_slots([slots])
+        assert result["60m"] == slots["60m"]
+
+    def test_identical_sets(self):
+        slots_a = {"60m": [_slot(9, 0, 60), _slot(10, 0, 60)]}
+        slots_b = {"60m": [_slot(9, 0, 60), _slot(10, 0, 60)]}
+        result = intersect_free_slots([slots_a, slots_b])
+        assert len(result["60m"]) == 2
+
+    def test_disjoint_sets(self):
+        slots_a = {"60m": [_slot(9, 0, 60)]}
+        slots_b = {"60m": [_slot(14, 0, 60)]}
+        result = intersect_free_slots([slots_a, slots_b])
+        assert result["60m"] == []
+
+    def test_partial_overlap(self):
+        slots_a = {"60m": [_slot(9, 0, 60), _slot(10, 0, 60), _slot(11, 0, 60)]}
+        slots_b = {"60m": [_slot(10, 0, 60), _slot(11, 0, 60), _slot(14, 0, 60)]}
+        result = intersect_free_slots([slots_a, slots_b])
+        assert len(result["60m"]) == 2
+        assert result["60m"][0].start.hour == 10
+        assert result["60m"][1].start.hour == 11
+
+    def test_preserves_order_from_first_set(self):
+        slots_a = {"60m": [_slot(11, 0, 60), _slot(9, 0, 60)]}
+        slots_b = {"60m": [_slot(9, 0, 60), _slot(11, 0, 60)]}
+        result = intersect_free_slots([slots_a, slots_b])
+        assert result["60m"][0].start.hour == 11
+        assert result["60m"][1].start.hour == 9
+
+    def test_multiple_durations(self):
+        slots_a = {
+            "30m": [_slot(9, 0, 30), _slot(9, 30, 30)],
+            "60m": [_slot(9, 0, 60)],
+        }
+        slots_b = {
+            "30m": [_slot(9, 0, 30)],
+            "60m": [_slot(9, 0, 60)],
+        }
+        result = intersect_free_slots([slots_a, slots_b])
+        assert len(result["30m"]) == 1
+        assert len(result["60m"]) == 1
+
+    def test_duration_missing_in_one_set_yields_empty(self):
+        slots_a = {"30m": [_slot(9, 0, 30)], "60m": [_slot(9, 0, 60)]}
+        slots_b = {"30m": [_slot(9, 0, 30)]}
+        result = intersect_free_slots([slots_a, slots_b])
+        assert len(result["30m"]) == 1
+        assert result["60m"] == []
+
+    def test_three_sets(self):
+        slots_a = {"60m": [_slot(9, 0, 60), _slot(10, 0, 60), _slot(11, 0, 60)]}
+        slots_b = {"60m": [_slot(9, 0, 60), _slot(10, 0, 60)]}
+        slots_c = {"60m": [_slot(10, 0, 60), _slot(11, 0, 60)]}
+        result = intersect_free_slots([slots_a, slots_b, slots_c])
+        assert len(result["60m"]) == 1
+        assert result["60m"][0].start.hour == 10

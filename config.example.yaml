@@ -20,6 +20,12 @@ availability:
   ics_urls:
     - url: https://calendar.google.com/calendar/ical/your-calendar-id%40group.calendar.google.com/private-abc123/basic.ics
 
+  # Federation: other zeitfenster instances whose free slots are intersected
+  # with this instance's slots. Only times available on ALL instances are shown.
+  # zeitfenster_urls:
+  #   - url: https://alice.example.com
+  #   - url: https://bob.example.com
+
 rules:
   timezone: Europe/Vienna
   working_hours:
@@ -34,7 +40,11 @@ rules:
   horizon: 60d
 
 email:
-  owner: you@example.com
+  # Single owner or list for federation:
+  # owner: you@example.com
+  owner:
+    - alice@example.com
+    - bob@example.com
   smtp_host_env: SMTP_HOST
   smtp_port: 587
   smtp_user_env: SMTP_USER

@@ -4,10 +4,14 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+import structlog
+
 from zeitfenster.caldav_client import BusyInterval, fetch_busy_intervals
 from zeitfenster.config import AppConfig, WorkingHours
 from zeitfenster.ics_client import fetch_busy_intervals_ics
 from zeitfenster.parsing import parse_duration, parse_time_range
+
+logger = structlog.get_logger()
 
 _WEEKDAY_ATTRS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 
@@ -138,6 +142,30 @@ def compute_free_slots(
     return result
 
 
+def intersect_free_slots(
+    slot_sets: list[dict[str, list[FreeSlot]]],
+) -> dict[str, list[FreeSlot]]:
+    if not slot_sets:
+        return {}
+    if len(slot_sets) == 1:
+        return slot_sets[0]
+
+    all_durations = set()
+    for s in slot_sets:
+        all_durations.update(s.keys())
+
+    result: dict[str, list[FreeSlot]] = {}
+    for duration in all_durations:
+        sets_of_keys: list[set[tuple[datetime, datetime]]] = []
+        for s in slot_sets:
+            slots = s.get(duration, [])
+            sets_of_keys.append({(slot.start, slot.end) for slot in slots})
+        common = sets_of_keys[0].intersection(*sets_of_keys[1:])
+        first_slots = slot_sets[0].get(duration, [])
+        result[duration] = [s for s in first_slots if (s.start, s.end) in common]
+    return result
+
+
 def fetch_and_compute(config: AppConfig) -> dict[str, list[FreeSlot]]:
     tz = ZoneInfo(config.rules.timezone)
     now = datetime.now(tz)
@@ -154,4 +182,20 @@ def fetch_and_compute(config: AppConfig) -> dict[str, list[FreeSlot]]:
         intervals = fetch_busy_intervals_ics(source, range_start, range_end)
         all_busy.extend(intervals)
 
-    return compute_free_slots(all_busy, config)
+    local_slots = compute_free_slots(all_busy, config)
+
+    if not config.availability.zeitfenster_urls:
+        return local_slots
+
+    from zeitfenster.zeitfenster_client import fetch_free_slots
+
+    slot_sets: list[dict[str, list[FreeSlot]]] = [local_slots]
+    for source in config.availability.zeitfenster_urls:
+        try:
+            remote = fetch_free_slots(source, config.rules.slot_durations)
+            slot_sets.append(remote)
+        except Exception:
+            logger.exception("federation_fetch_failed", url=source.url)
+            return {d: [] for d in config.rules.slot_durations}
+
+    return intersect_free_slots(slot_sets)

@@ -36,9 +36,14 @@ class IcsUrlSource(BaseModel):
     url: str
 
 
+class ZeitfensterSource(BaseModel):
+    url: str
+
+
 class Availability(BaseModel):
     calendars: list[CalendarSource] = []
     ics_urls: list[IcsUrlSource] = []
+    zeitfenster_urls: list[ZeitfensterSource] = []
 
 
 class WorkingHours(BaseModel):
@@ -61,12 +66,18 @@ class Rules(BaseModel):
 
 
 class Email(BaseModel):
-    owner: str
+    owner: str | list[str]
     smtp_host_env: str = "SMTP_HOST"
     smtp_port: int = 587
     smtp_user_env: str = "SMTP_USER"
     smtp_password_env: str = "SMTP_PASSWORD"
     smtp_start_tls: bool = True
+
+    @property
+    def owner_list(self) -> list[str]:
+        if isinstance(self.owner, list):
+            return self.owner
+        return [self.owner]
 
     @property
     def smtp_host(self) -> str:

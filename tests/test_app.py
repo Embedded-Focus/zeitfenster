@@ -79,6 +79,32 @@ def client(test_env):
         yield c
 
 
+class TestFreeSlotsEndpoint:
+    def test_returns_slots_json(self, client):
+        client.app.state.current_slots = {
+            "60m": [
+                FreeSlot(
+                    start=datetime(2026, 7, 6, 10, 0, tzinfo=TZ),
+                    end=datetime(2026, 7, 6, 11, 0, tzinfo=TZ),
+                    duration=timedelta(hours=1),
+                ),
+            ]
+        }
+        response = client.get("/api/free-slots")
+        assert response.status_code == 200
+        data = response.json()
+        assert "slots" in data
+        assert len(data["slots"]["60m"]) == 1
+        assert "start" in data["slots"]["60m"][0]
+        assert "end" in data["slots"]["60m"][0]
+
+    def test_returns_empty_when_no_slots(self, client):
+        client.app.state.current_slots = {}
+        response = client.get("/api/free-slots")
+        assert response.status_code == 200
+        assert response.json() == {"slots": {}}
+
+
 class TestHealthEndpoint:
     def test_health_returns_ok(self, client):
         response = client.get("/health")

@@ -20,7 +20,7 @@ async def send_booking_email(
     msg = EmailMessage()
     msg["Subject"] = f"Booking Request: {customer_name} – {slot_summary}"
     msg["From"] = config.smtp_user
-    msg["To"] = config.owner
+    msg["To"] = ", ".join(config.owner_list)
 
     msg.set_content(
         f"New booking request:\n\n"
@@ -39,7 +39,7 @@ async def send_booking_email(
 
     logger.info(
         "sending_booking_email",
-        to=config.owner,
+        to=config.owner_list,
         customer=customer_email,
         slot=slot_summary,
     )
@@ -53,4 +53,4 @@ async def send_booking_email(
         start_tls=config.smtp_start_tls,
     )
 
-    logger.info("booking_email_sent", to=config.owner)
+    logger.info("booking_email_sent", to=config.owner_list)

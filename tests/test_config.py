@@ -12,6 +12,23 @@ email:
   owner: test@example.com
 """
 
+MULTI_OWNER_YAML = """\
+email:
+  owner:
+    - alice@example.com
+    - bob@example.com
+"""
+
+FEDERATION_YAML = """\
+availability:
+  zeitfenster_urls:
+    - url: https://alice.example.com
+    - url: https://bob.example.com
+
+email:
+  owner: test@example.com
+"""
+
 FULL_YAML = """\
 branding:
   title: "Test Booking"
@@ -143,5 +160,47 @@ class TestEnvVarResolution:
             os.environ.pop("TEST_SMTP_HOST", None)
             with pytest.raises(ValueError, match="TEST_SMTP_HOST"):
                 _ = cfg.email.smtp_host
+        finally:
+            path.unlink()
+
+
+class TestOwnerList:
+    def test_single_string_owner(self):
+        path = _write_yaml(MINIMAL_YAML)
+        try:
+            cfg = AppConfig.from_yaml(path)
+            assert cfg.email.owner == "test@example.com"
+            assert cfg.email.owner_list == ["test@example.com"]
+        finally:
+            path.unlink()
+
+    def test_list_owner(self):
+        path = _write_yaml(MULTI_OWNER_YAML)
+        try:
+            cfg = AppConfig.from_yaml(path)
+            assert cfg.email.owner == ["alice@example.com", "bob@example.com"]
+            assert cfg.email.owner_list == ["alice@example.com", "bob@example.com"]
+        finally:
+            path.unlink()
+
+
+class TestZeitfensterSource:
+    def test_parses_zeitfenster_urls(self):
+        path = _write_yaml(FEDERATION_YAML)
+        try:
+            cfg = AppConfig.from_yaml(path)
+            assert len(cfg.availability.zeitfenster_urls) == 2
+            assert (
+                cfg.availability.zeitfenster_urls[0].url == "https://alice.example.com"
+            )
+            assert cfg.availability.zeitfenster_urls[1].url == "https://bob.example.com"
+        finally:
+            path.unlink()
+
+    def test_default_empty(self):
+        path = _write_yaml(MINIMAL_YAML)
+        try:
+            cfg = AppConfig.from_yaml(path)
+            assert cfg.availability.zeitfenster_urls == []
         finally:
             path.unlink()

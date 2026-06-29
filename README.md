@@ -1,12 +1,12 @@
 # Zeitfenster
 
-Minimal, self-hosted appointment booking service. Reads existing CalDAV calendars to compute availability and presents free slots on a web page. Customers pick a slot and submit their contact details — you receive an email with an `.ics` file to import and send a calendar invitation.
+Minimal, self-hosted appointment booking service. Reads existing calendars (CalDAV, ICS feeds) to compute availability and presents free slots on a web page. Customers pick a slot and submit their contact details — you receive an email with an `.ics` file to import and send a calendar invitation.
 
 The application never writes to any calendar. You stay in control of every booking.
 
 ## How It Works
 
-1. A background task periodically reads your CalDAV calendars (read-only).
+1. A background task periodically reads your calendars — CalDAV, ICS feeds, or both (read-only).
 2. Free slots are computed based on your working hours, buffer, and other rules.
 3. A static HTML page is generated and served by Caddy.
 4. When a customer books a slot, a small FastAPI endpoint sends you an email with an `.ics` attachment.
@@ -16,15 +16,15 @@ The application never writes to any calendar. You stay in control of every booki
 
 ```
 Internet → [Traefik] → Caddy (static files + reverse proxy)
-                            ↓ POST /book
+                            ↓ POST /book, GET /api/free-slots
                         Python App (FastAPI)
                             ↓ read-only
-                        CalDAV Calendars
+                        CalDAV / ICS Calendars
 ```
 
 Two containers in production:
-- **Caddy** — serves static files, proxies `/book` to the app. No credentials, no Python.
-- **Python App** — reads CalDAV, computes slots, generates HTML, sends booking emails. Internal-only, not exposed to the internet.
+- **Caddy** — serves static files, proxies `/book` and `/api/*` to the app. No credentials, no Python.
+- **Python App** — reads calendars, computes slots, generates HTML, sends booking emails. Internal-only, not exposed to the internet.
 
 ## Quick Start (Demo)
 
@@ -41,16 +41,18 @@ This starts a full demo environment with:
 
 ```
 src/zeitfenster/
-├── app.py              FastAPI app (POST /book, health check, scheduler)
-├── availability.py     Free slot computation (merge, buffer, working hours)
-├── caldav_client.py    CalDAV read wrapper
-├── config.py           Pydantic config (YAML + env vars)
-├── email.py            SMTP email with .ics attachment
-├── generator.py        Static site generator (Jinja2 → HTML)
-├── ics.py              .ics file builder (VEVENT with ATTENDEE)
-├── parsing.py          Duration and time range parsing
-├── templates/          Jinja2 templates (base, index, thankyou, placeholder)
-└── static/             Pico CSS + custom styles
+├── app.py                  FastAPI app (POST /book, GET /api/free-slots, scheduler)
+├── availability.py         Free slot computation, intersection, orchestrator
+├── caldav_client.py        CalDAV read wrapper
+├── ics_client.py           ICS URL feed reader
+├── zeitfenster_client.py   Federation client (fetches remote free slots)
+├── config.py               Pydantic config (YAML + env vars)
+├── email.py                SMTP email with .ics attachment (multi-recipient)
+├── generator.py            Static site generator (Jinja2 → HTML)
+├── ics.py                  .ics file builder (VEVENT with ATTENDEE)
+├── parsing.py              Duration and time range parsing
+├── templates/              Jinja2 templates (base, index, thankyou, placeholder)
+└── static/                 Pico CSS + custom styles
 
 tests/                  Unit and integration tests
 demo/                   Demo environment (Radicale config, sample calendars, .env)
@@ -61,6 +63,27 @@ compose.prod.yaml       Production override (Traefik labels, no demo services)
 pod.yaml                Podman kube reference (production)
 config.example.yaml     Example configuration
 ```
+
+## Federation
+
+Multiple zeitfenster instances can be federated so customers only see slots when **all** team members are free. Each instance exposes its computed free slots via `GET /api/free-slots`. A federation instance fetches those and intersects them — it never learns individual busy times.
+
+```yaml
+availability:
+  zeitfenster_urls:
+    - url: https://alice.example.com
+    - url: https://bob.example.com
+
+email:
+  owner:
+    - alice@example.com
+    - bob@example.com
+```
+
+Requirements:
+- All member instances and the federation must use the same `slot_durations` and compatible timezones.
+- If any member instance is unreachable, the federation shows **no slots** (fail-closed to prevent double-bookings).
+- A pure federation instance (no own calendars) works naturally — working-hour candidates are generated locally, then narrowed by intersection.
 
 ## Configuration
 

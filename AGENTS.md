@@ -28,16 +28,27 @@ Calendar sources:
 
 Both source types produce `BusyInterval` lists that are merged, buffered, and subtracted from working hours to compute free slots.
 
+### Federation
+
+Multiple zeitfenster instances can be federated so customers only see slots when **all** members are free. Each instance exposes `GET /api/free-slots` (JSON). A federation instance fetches each member's free slots and intersects them — it never sees individual busy times.
+
+- **Config**: `availability.zeitfenster_urls` lists member instance URLs
+- **Fail-closed**: if any member instance is unreachable, the federation shows no slots (prevents double-bookings)
+- **Slot alignment**: all instances must use the same `slot_durations` and compatible timezones for exact `(start, end)` matching
+- **Multi-owner email**: `email.owner` accepts a list of addresses so all team members receive booking notifications
+- **Pure federation** (no own calendars) works naturally — working-hour candidates are generated locally, then narrowed by intersection
+
 ## Key Modules
 
 - `config.py` — Pydantic models, YAML loading, env var resolution for secrets
 - `caldav_client.py` — CalDAV fetch → `BusyInterval` list
 - `ics_client.py` — ICS URL fetch → `BusyInterval` list
-- `availability.py` — merging, buffering, free slot computation, orchestrator (`fetch_and_compute`)
+- `zeitfenster_client.py` — fetches free slots from remote zeitfenster instances (federation)
+- `availability.py` — merging, buffering, free slot computation, intersection, orchestrator (`fetch_and_compute`)
 - `generator.py` — Jinja2 rendering, atomic file swap to `/site`
-- `app.py` — FastAPI (POST `/book`, GET `/health`, lifespan scheduler)
+- `app.py` — FastAPI (POST `/book`, GET `/api/free-slots`, GET `/health`, lifespan scheduler)
 - `ics.py` — builds `.ics` attachments for booking emails
-- `email.py` — SMTP sending
+- `email.py` — SMTP sending (supports multiple recipients)
 
 ## Verification
 

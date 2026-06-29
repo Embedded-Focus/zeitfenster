@@ -12,5 +12,10 @@
 	}
 	reverse_proxy @health app:8000
 
+	@api {
+		path /api/*
+	}
+	reverse_proxy @api app:8000
+
 	file_server
 }
