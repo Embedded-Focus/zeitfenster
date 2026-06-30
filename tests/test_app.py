@@ -113,6 +113,18 @@ class TestHealthEndpoint:
 
 
 class TestBookEndpoint:
+    def _valid_booking_data(self, **overrides):
+        data = {
+            "name": "Alice",
+            "email": "alice@example.com",
+            "slot_start": "2026-07-06T10:00:00+02:00",
+            "slot_end": "2026-07-06T11:00:00+02:00",
+            "duration": "60m",
+            "website": "",
+        }
+        data.update(overrides)
+        return data
+
     def _set_available_slot(self, client):
         client.app.state.current_slots = {
             "60m": [
@@ -130,17 +142,30 @@ class TestBookEndpoint:
         with patch("zeitfenster.app._regenerate", new_callable=AsyncMock):
             response = client.post(
                 "/book",
-                data={
-                    "name": "Alice",
-                    "email": "alice@example.com",
-                    "slot_start": "2026-07-06T10:00:00+02:00",
-                    "slot_end": "2026-07-06T11:00:00+02:00",
-                    "duration": "60m",
-                    "website": "",
-                },
+                data=self._valid_booking_data(),
             )
         assert response.status_code == 200
         assert "Thank you" in response.text
+        mock_send.assert_called_once()
+        call_kwargs = mock_send.call_args
+        assert call_kwargs[1]["customer_name"] == "Alice"
+        assert call_kwargs[1]["customer_email"] == "alice@example.com"
+
+    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    def test_booking_fields_are_normalized(self, mock_send, client):
+        self._set_available_slot(client)
+        with patch("zeitfenster.app._regenerate", new_callable=AsyncMock):
+            response = client.post(
+                "/book",
+                data=self._valid_booking_data(
+                    name="  Alice  ",
+                    email="  alice@example.com  ",
+                    slot_start="  2026-07-06T10:00:00+02:00  ",
+                    slot_end="  2026-07-06T11:00:00+02:00  ",
+                    duration="  60m  ",
+                ),
+            )
+        assert response.status_code == 200
         mock_send.assert_called_once()
         call_kwargs = mock_send.call_args
         assert call_kwargs[1]["customer_name"] == "Alice"
@@ -163,6 +188,35 @@ class TestBookEndpoint:
         assert response.status_code == 200
         assert "Thank you" in response.text
         mock_send.assert_not_called()
+
+    @pytest.mark.parametrize(
+        ("field", "value", "detail"),
+        [
+            ("name", "   ", "name is required"),
+            ("name", "A" * 101, "name is too long"),
+            ("name", "Alice\nBob", "name contains invalid characters"),
+            ("email", "x", "email is too short"),
+            ("email", "not-an-email", "Invalid email"),
+            ("email", "alice bob@example.com", "Invalid email"),
+            ("email", "a" * 247 + "@example.com", "email is too long"),
+            ("slot_start", "2" * 65, "slot_start is too long"),
+            ("slot_end", "2" * 65, "slot_end is too long"),
+            ("duration", "x" * 17, "duration is too long"),
+            ("website", "x" * 2049, "website is too long"),
+        ],
+    )
+    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    def test_rejects_invalid_form_fields(self, mock_send, client, field, value, detail):
+        self._set_available_slot(client)
+        with patch("zeitfenster.app._regenerate", new_callable=AsyncMock) as mock_regen:
+            response = client.post(
+                "/book",
+                data=self._valid_booking_data(**{field: value}),
+            )
+        assert response.status_code == 400
+        assert response.json()["detail"] == detail
+        mock_send.assert_not_called()
+        mock_regen.assert_not_called()
 
     @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
     def test_rejects_slot_not_in_current_availability(self, mock_send, client):

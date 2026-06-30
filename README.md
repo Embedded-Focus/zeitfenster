@@ -33,6 +33,7 @@ Zeitfenster is designed around a small public surface and a secret-free frontend
 - **Read-only calendars:** the app reads CalDAV and ICS sources, but never writes to calendars. Booking requests are sent as `.ics` email attachments for manual import.
 - **Secret isolation:** Caddy serves static files and proxies selected requests, but does not receive CalDAV or SMTP credentials. Those stay in the internal Python app container.
 - **No database or sessions:** state is derived from configuration, calendar reads, generated static files, and in-memory availability.
+- **Bounded booking input:** booking form fields are normalized and size-limited before use. Names reject control characters, and customer email addresses are checked for a valid basic shape.
 - **Booking slot validation:** `POST /book` does not trust submitted hidden form fields by themselves. The backend parses timezone-aware datetimes, requires `slot_end > slot_start`, checks that the posted duration is configured and matches the submitted range, and requires `(duration, slot_start, slot_end)` to exactly match a currently advertised slot in memory.
 - **Fail-before-side-effects:** invalid, forged, stale, malformed, or timezone-naive booking requests are rejected before `.ics` generation, SMTP delivery, or availability regeneration.
 - **Federation privacy boundary:** `/api/free-slots` exposes computed free slots only. Federation members do not receive raw busy intervals or calendar event details.

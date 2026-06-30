@@ -4,6 +4,7 @@ import asyncio
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime
+from email.utils import parseaddr
 from pathlib import Path
 
 import structlog
@@ -24,6 +25,11 @@ CONFIG_PATH = Path(
 )
 SITE_DIR = Path(os.environ.get("ZEITFENSTER_SITE_DIR", "/site"))
 REGEN_INTERVAL_SECONDS = 900
+MAX_NAME_LENGTH = 100
+MAX_EMAIL_LENGTH = 254
+MAX_DATETIME_LENGTH = 64
+MAX_DURATION_LENGTH = 16
+MAX_HONEYPOT_LENGTH = 2048
 
 
 async def _regenerate(app_instance: FastAPI) -> None:
@@ -85,6 +91,79 @@ def _read_thankyou(site_dir: Path) -> str:
     return "<html><body><h1>Thank you!</h1><p>Your booking request has been received.</p></body></html>"
 
 
+def _has_control_characters(value: str) -> bool:
+    return any(ord(char) < 32 or ord(char) == 127 for char in value)
+
+
+def _validate_bounded_field(
+    value: str,
+    field_name: str,
+    max_length: int,
+) -> str:
+    normalized = value.strip()
+    if len(normalized) > max_length:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{field_name} is too long",
+        )
+    return normalized
+
+
+def _validate_customer_name(value: str) -> str:
+    name = _validate_bounded_field(value, "name", MAX_NAME_LENGTH)
+    if not name:
+        raise HTTPException(status_code=400, detail="name is required")
+    if _has_control_characters(name):
+        raise HTTPException(
+            status_code=400,
+            detail="name contains invalid characters",
+        )
+    return name
+
+
+def _validate_customer_email(value: str) -> str:
+    email = _validate_bounded_field(value, "email", MAX_EMAIL_LENGTH)
+    if len(email) < 3:
+        raise HTTPException(status_code=400, detail="email is too short")
+    if _has_control_characters(email) or any(char.isspace() for char in email):
+        raise HTTPException(status_code=400, detail="Invalid email")
+
+    display_name, parsed_email = parseaddr(email)
+    if display_name or parsed_email != email or email.count("@") != 1:
+        raise HTTPException(status_code=400, detail="Invalid email")
+
+    local_part, domain = email.rsplit("@", 1)
+    if (
+        not local_part
+        or not domain
+        or domain.startswith(".")
+        or domain.endswith(".")
+        or ".." in domain
+    ):
+        raise HTTPException(status_code=400, detail="Invalid email")
+
+    return email
+
+
+def _validate_booking_form_fields(
+    *,
+    name: str,
+    email: str,
+    slot_start: str,
+    slot_end: str,
+    duration: str,
+    website: str,
+) -> tuple[str, str, str, str, str, str]:
+    return (
+        _validate_customer_name(name),
+        _validate_customer_email(email),
+        _validate_bounded_field(slot_start, "slot_start", MAX_DATETIME_LENGTH),
+        _validate_bounded_field(slot_end, "slot_end", MAX_DATETIME_LENGTH),
+        _validate_bounded_field(duration, "duration", MAX_DURATION_LENGTH),
+        _validate_bounded_field(website, "website", MAX_HONEYPOT_LENGTH),
+    )
+
+
 def _parse_booking_datetime(value: str, field_name: str) -> datetime:
     try:
         parsed = datetime.fromisoformat(value)
@@ -141,6 +220,16 @@ async def book(
 ) -> HTMLResponse:
     config: AppConfig = request.app.state.config
     site_dir: Path = request.app.state.site_dir
+    name, email, slot_start, slot_end, duration, website = (
+        _validate_booking_form_fields(
+            name=name,
+            email=email,
+            slot_start=slot_start,
+            slot_end=slot_end,
+            duration=duration,
+            website=website,
+        )
+    )
 
     if website:
         logger.info("honeypot_triggered", name=name)
