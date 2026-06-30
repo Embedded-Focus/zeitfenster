@@ -113,8 +113,20 @@ class TestHealthEndpoint:
 
 
 class TestBookEndpoint:
+    def _set_available_slot(self, client):
+        client.app.state.current_slots = {
+            "60m": [
+                FreeSlot(
+                    start=datetime(2026, 7, 6, 10, 0, tzinfo=TZ),
+                    end=datetime(2026, 7, 6, 11, 0, tzinfo=TZ),
+                    duration=timedelta(hours=1),
+                ),
+            ]
+        }
+
     @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
     def test_successful_booking(self, mock_send, client, test_env):
+        self._set_available_slot(client)
         with patch("zeitfenster.app._regenerate", new_callable=AsyncMock):
             response = client.post(
                 "/book",
@@ -152,6 +164,156 @@ class TestBookEndpoint:
         assert "Thank you" in response.text
         mock_send.assert_not_called()
 
+    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    def test_rejects_slot_not_in_current_availability(self, mock_send, client):
+        self._set_available_slot(client)
+        with patch("zeitfenster.app._regenerate", new_callable=AsyncMock) as mock_regen:
+            response = client.post(
+                "/book",
+                data={
+                    "name": "Alice",
+                    "email": "alice@example.com",
+                    "slot_start": "2026-07-06T12:00:00+02:00",
+                    "slot_end": "2026-07-06T13:00:00+02:00",
+                    "duration": "60m",
+                    "website": "",
+                },
+            )
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Requested slot is not available"
+        mock_send.assert_not_called()
+        mock_regen.assert_not_called()
+
+    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    def test_rejects_stale_slot_when_current_availability_is_empty(
+        self, mock_send, client
+    ):
+        client.app.state.current_slots = {"60m": []}
+        with patch("zeitfenster.app._regenerate", new_callable=AsyncMock) as mock_regen:
+            response = client.post(
+                "/book",
+                data={
+                    "name": "Alice",
+                    "email": "alice@example.com",
+                    "slot_start": "2026-07-06T10:00:00+02:00",
+                    "slot_end": "2026-07-06T11:00:00+02:00",
+                    "duration": "60m",
+                    "website": "",
+                },
+            )
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Requested slot is not available"
+        mock_send.assert_not_called()
+        mock_regen.assert_not_called()
+
+    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    def test_rejects_duration_not_in_config(self, mock_send, client):
+        self._set_available_slot(client)
+        with patch("zeitfenster.app._regenerate", new_callable=AsyncMock) as mock_regen:
+            response = client.post(
+                "/book",
+                data={
+                    "name": "Alice",
+                    "email": "alice@example.com",
+                    "slot_start": "2026-07-06T10:00:00+02:00",
+                    "slot_end": "2026-07-06T11:00:00+02:00",
+                    "duration": "90m",
+                    "website": "",
+                },
+            )
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Invalid duration"
+        mock_send.assert_not_called()
+        mock_regen.assert_not_called()
+
+    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    def test_rejects_mismatched_duration(self, mock_send, client):
+        client.app.state.current_slots = {
+            "60m": [
+                FreeSlot(
+                    start=datetime(2026, 7, 6, 10, 0, tzinfo=TZ),
+                    end=datetime(2026, 7, 6, 12, 0, tzinfo=TZ),
+                    duration=timedelta(hours=2),
+                ),
+            ]
+        }
+        with patch("zeitfenster.app._regenerate", new_callable=AsyncMock) as mock_regen:
+            response = client.post(
+                "/book",
+                data={
+                    "name": "Alice",
+                    "email": "alice@example.com",
+                    "slot_start": "2026-07-06T10:00:00+02:00",
+                    "slot_end": "2026-07-06T12:00:00+02:00",
+                    "duration": "60m",
+                    "website": "",
+                },
+            )
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Requested slot duration does not match"
+        mock_send.assert_not_called()
+        mock_regen.assert_not_called()
+
+    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    def test_rejects_slot_end_before_slot_start(self, mock_send, client):
+        self._set_available_slot(client)
+        with patch("zeitfenster.app._regenerate", new_callable=AsyncMock) as mock_regen:
+            response = client.post(
+                "/book",
+                data={
+                    "name": "Alice",
+                    "email": "alice@example.com",
+                    "slot_start": "2026-07-06T11:00:00+02:00",
+                    "slot_end": "2026-07-06T10:00:00+02:00",
+                    "duration": "60m",
+                    "website": "",
+                },
+            )
+        assert response.status_code == 400
+        assert response.json()["detail"] == "slot_end must be after slot_start"
+        mock_send.assert_not_called()
+        mock_regen.assert_not_called()
+
+    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    def test_rejects_malformed_slot_start(self, mock_send, client):
+        self._set_available_slot(client)
+        with patch("zeitfenster.app._regenerate", new_callable=AsyncMock) as mock_regen:
+            response = client.post(
+                "/book",
+                data={
+                    "name": "Alice",
+                    "email": "alice@example.com",
+                    "slot_start": "not-a-date",
+                    "slot_end": "2026-07-06T11:00:00+02:00",
+                    "duration": "60m",
+                    "website": "",
+                },
+            )
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Invalid slot_start"
+        mock_send.assert_not_called()
+        mock_regen.assert_not_called()
+
+    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    def test_rejects_naive_slot_start(self, mock_send, client):
+        self._set_available_slot(client)
+        with patch("zeitfenster.app._regenerate", new_callable=AsyncMock) as mock_regen:
+            response = client.post(
+                "/book",
+                data={
+                    "name": "Alice",
+                    "email": "alice@example.com",
+                    "slot_start": "2026-07-06T10:00:00",
+                    "slot_end": "2026-07-06T11:00:00+02:00",
+                    "duration": "60m",
+                    "website": "",
+                },
+            )
+        assert response.status_code == 400
+        assert response.json()["detail"] == "slot_start must include a timezone"
+        mock_send.assert_not_called()
+        mock_regen.assert_not_called()
+
     def test_missing_fields_returns_422(self, client):
         response = client.post(
             "/book",
@@ -161,6 +323,7 @@ class TestBookEndpoint:
 
     @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
     def test_email_failure_still_returns_thankyou(self, mock_send, client):
+        self._set_available_slot(client)
         mock_send.side_effect = ConnectionError("SMTP down")
         with patch("zeitfenster.app._regenerate", new_callable=AsyncMock):
             response = client.post(

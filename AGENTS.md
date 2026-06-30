@@ -9,6 +9,12 @@ Minimal, self-hosted appointment booking service. Reads existing calendars (CalD
 - **Security first** — the web-facing container (Caddy) holds zero secrets. CalDAV/SMTP credentials stay isolated in the internal Python backend.
 - **No inline JavaScript** — no SPA framework, no analytics.
 
+## Security Invariants
+
+- `POST /book` must never trust submitted slot fields by themselves. Before generating an `.ics`, sending email, or scheduling regeneration, validate that `(duration, slot_start, slot_end)` exactly matches a currently advertised slot in `app.state.current_slots`.
+- Invalid public input must fail before SMTP, calendar fetching, or filesystem writes are triggered.
+- Keep `/api/free-slots` limited to computed free slots. Never expose raw busy intervals, calendar event metadata, CalDAV details, or secrets.
+
 ## Tech Stack
 
 - Python 3.14+, FastAPI, Jinja2, Pico CSS

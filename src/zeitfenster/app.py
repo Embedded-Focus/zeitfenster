@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 import structlog
-from fastapi import FastAPI, Form, Request
+from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
 from zeitfenster.availability import FreeSlot, fetch_and_compute
@@ -15,6 +15,7 @@ from zeitfenster.config import AppConfig
 from zeitfenster.email import send_booking_email
 from zeitfenster.generator import generate_placeholder, generate_site
 from zeitfenster.ics import build_booking_ics
+from zeitfenster.parsing import parse_duration
 
 logger = structlog.get_logger()
 
@@ -84,6 +85,50 @@ def _read_thankyou(site_dir: Path) -> str:
     return "<html><body><h1>Thank you!</h1><p>Your booking request has been received.</p></body></html>"
 
 
+def _parse_booking_datetime(value: str, field_name: str) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid {field_name}",
+        ) from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{field_name} must include a timezone",
+        )
+    return parsed
+
+
+def _validate_requested_slot(
+    *,
+    request: Request,
+    config: AppConfig,
+    duration: str,
+    start: datetime,
+    end: datetime,
+) -> None:
+    if end <= start:
+        raise HTTPException(status_code=400, detail="slot_end must be after slot_start")
+
+    if duration not in config.rules.slot_durations:
+        raise HTTPException(status_code=400, detail="Invalid duration")
+
+    if end - start != parse_duration(duration):
+        raise HTTPException(
+            status_code=400,
+            detail="Requested slot duration does not match",
+        )
+
+    current_slots: dict[str, list[FreeSlot]] = getattr(
+        request.app.state, "current_slots", {}
+    )
+    matching_slots = current_slots.get(duration, [])
+    if not any(slot.start == start and slot.end == end for slot in matching_slots):
+        raise HTTPException(status_code=400, detail="Requested slot is not available")
+
+
 @app.post("/book", response_class=HTMLResponse)
 async def book(
     request: Request,
@@ -101,8 +146,15 @@ async def book(
         logger.info("honeypot_triggered", name=name)
         return HTMLResponse(_read_thankyou(site_dir))
 
-    start = datetime.fromisoformat(slot_start)
-    end = datetime.fromisoformat(slot_end)
+    start = _parse_booking_datetime(slot_start, "slot_start")
+    end = _parse_booking_datetime(slot_end, "slot_end")
+    _validate_requested_slot(
+        request=request,
+        config=config,
+        duration=duration,
+        start=start,
+        end=end,
+    )
 
     slot_summary = f"{start.strftime('%A, %B %-d %Y %H:%M')} – {end.strftime('%H:%M')}"
 

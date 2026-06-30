@@ -26,6 +26,17 @@ Two containers in production:
 - **Caddy** — serves static files, proxies `/book` and `/api/*` to the app. No credentials, no Python.
 - **Python App** — reads calendars, computes slots, generates HTML, sends booking emails. Internal-only, not exposed to the internet.
 
+## Security
+
+Zeitfenster is designed around a small public surface and a secret-free frontend container.
+
+- **Read-only calendars:** the app reads CalDAV and ICS sources, but never writes to calendars. Booking requests are sent as `.ics` email attachments for manual import.
+- **Secret isolation:** Caddy serves static files and proxies selected requests, but does not receive CalDAV or SMTP credentials. Those stay in the internal Python app container.
+- **No database or sessions:** state is derived from configuration, calendar reads, generated static files, and in-memory availability.
+- **Booking slot validation:** `POST /book` does not trust submitted hidden form fields by themselves. The backend parses timezone-aware datetimes, requires `slot_end > slot_start`, checks that the posted duration is configured and matches the submitted range, and requires `(duration, slot_start, slot_end)` to exactly match a currently advertised slot in memory.
+- **Fail-before-side-effects:** invalid, forged, stale, malformed, or timezone-naive booking requests are rejected before `.ics` generation, SMTP delivery, or availability regeneration.
+- **Federation privacy boundary:** `/api/free-slots` exposes computed free slots only. Federation members do not receive raw busy intervals or calendar event details.
+
 ## Quick Start (Demo)
 
 ```sh
