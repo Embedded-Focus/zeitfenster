@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import urllib.request
 from datetime import datetime
 
+import httpx2
 import recurring_ical_events
 import structlog
 from icalendar import Calendar
@@ -11,6 +11,7 @@ from zeitfenster.caldav_client import BusyInterval
 from zeitfenster.config import IcsUrlSource
 
 logger = structlog.get_logger()
+ICS_FETCH_TIMEOUT_SECONDS = 10.0
 
 
 def fetch_busy_intervals_ics(
@@ -24,8 +25,13 @@ def fetch_busy_intervals_ics(
         range_start=range_start.isoformat(),
         range_end=range_end.isoformat(),
     )
-    with urllib.request.urlopen(source.url) as response:  # noqa: S310
-        data = response.read()
+    response = httpx2.get(
+        source.url,
+        timeout=ICS_FETCH_TIMEOUT_SECONDS,
+        follow_redirects=True,
+    )
+    response.raise_for_status()
+    data = response.content
 
     cal = Calendar.from_ical(data)
     events = recurring_ical_events.of(cal).between(range_start, range_end)

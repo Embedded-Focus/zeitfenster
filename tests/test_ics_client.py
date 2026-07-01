@@ -2,6 +2,9 @@ from datetime import datetime
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
+import httpx2
+import pytest
+
 from zeitfenster.config import IcsUrlSource
 from zeitfenster.ics_client import fetch_busy_intervals_ics
 
@@ -57,24 +60,22 @@ END:VCALENDAR
 """
 
 
-class _FakeResponse:
-    def __init__(self, data: bytes) -> None:
-        self._data = data
-
-    def read(self) -> bytes:
-        return self._data
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args):
-        pass
+def _make_response(
+    data: bytes,
+    status_code: int = 200,
+    url: str = "https://example.com/cal.ics",
+) -> httpx2.Response:
+    return httpx2.Response(
+        status_code,
+        content=data,
+        request=httpx2.Request("GET", url),
+    )
 
 
 def _fetch(ics_data: bytes, range_start: datetime, range_end: datetime):
     source = IcsUrlSource(url="https://example.com/cal.ics")
-    with patch("zeitfenster.ics_client.urllib.request.urlopen") as mock_urlopen:
-        mock_urlopen.return_value = _FakeResponse(ics_data)
+    with patch("zeitfenster.ics_client.httpx2.get") as mock_get:
+        mock_get.return_value = _make_response(ics_data)
         return fetch_busy_intervals_ics(source, range_start, range_end)
 
 
@@ -123,3 +124,32 @@ class TestFetchBusyIntervalsIcs:
         )
         assert len(intervals) == 1
         assert intervals[0].start.hour == 14
+
+    def test_uses_timeout_and_follows_redirects(self):
+        source = IcsUrlSource(url="https://example.com/cal.ics")
+
+        with patch("zeitfenster.ics_client.httpx2.get") as mock_get:
+            mock_get.return_value = _make_response(NO_EVENTS_ICS)
+            fetch_busy_intervals_ics(
+                source,
+                datetime(2026, 7, 1, tzinfo=TZ),
+                datetime(2026, 7, 2, tzinfo=TZ),
+            )
+
+        mock_get.assert_called_once_with(
+            "https://example.com/cal.ics",
+            timeout=10.0,
+            follow_redirects=True,
+        )
+
+    def test_http_error_raises(self):
+        source = IcsUrlSource(url="https://example.com/cal.ics")
+
+        with patch("zeitfenster.ics_client.httpx2.get") as mock_get:
+            mock_get.return_value = _make_response(b"not found", status_code=404)
+            with pytest.raises(httpx2.HTTPStatusError):
+                fetch_busy_intervals_ics(
+                    source,
+                    datetime(2026, 7, 1, tzinfo=TZ),
+                    datetime(2026, 7, 2, tzinfo=TZ),
+                )

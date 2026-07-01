@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import json
-import urllib.request
 from datetime import datetime
 
+import httpx2
 import structlog
 
 from zeitfenster.availability import FreeSlot
 from zeitfenster.config import ZeitfensterSource
 
 logger = structlog.get_logger()
+ZEITFENSTER_FETCH_TIMEOUT_SECONDS = 10.0
 
 
 def fetch_free_slots(
@@ -20,17 +21,18 @@ def fetch_free_slots(
     logger.info("fetching_zeitfenster", url=url)
 
     token = source.token
-    request: str | urllib.request.Request
-    if token is None:
-        request = url
-    else:
-        request = urllib.request.Request(
-            url,
-            headers={"Authorization": f"Bearer {token}"},
-        )
+    headers = {}
+    if token is not None:
+        headers["Authorization"] = f"Bearer {token}"
 
-    with urllib.request.urlopen(request, timeout=10) as response:  # noqa: S310
-        data = json.loads(response.read())
+    response = httpx2.get(
+        url,
+        headers=headers,
+        timeout=ZEITFENSTER_FETCH_TIMEOUT_SECONDS,
+        follow_redirects=False,
+    )
+    response.raise_for_status()
+    data = json.loads(response.content)
 
     remote_slots: dict = data.get("slots", {})
 

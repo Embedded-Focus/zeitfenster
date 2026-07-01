@@ -993,6 +993,7 @@ dependencies = [
     { name = "aiosmtplib" },
     { name = "caldav" },
     { name = "fastapi" },
+    { name = "httpx2" },
     { name = "icalendar" },
     { name = "jinja2" },
     { name = "pydantic" },
@@ -1005,7 +1006,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "httpx2" },
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -1018,6 +1018,7 @@ requires-dist = [
     { name = "aiosmtplib" },
     { name = "caldav" },
     { name = "fastapi" },
+    { name = "httpx2" },
     { name = "icalendar" },
     { name = "jinja2" },
     { name = "pydantic" },
@@ -1030,7 +1031,6 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "httpx2" },
     { name = "pre-commit", specifier = ">=4.6.0" },
     { name = "pytest" },
     { name = "pytest-asyncio" },

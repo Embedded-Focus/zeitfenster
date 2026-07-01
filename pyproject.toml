@@ -9,6 +9,7 @@ dependencies = [
     "aiosmtplib",
     "caldav",
     "fastapi",
+    "httpx2",
     "icalendar",
     "jinja2",
     "pydantic",
@@ -21,7 +22,6 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "httpx2",
     "pre-commit>=4.6.0",
     "pytest",
     "pytest-asyncio",
