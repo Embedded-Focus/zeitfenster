@@ -106,6 +106,7 @@ class TestGenerateSite:
             assert "onclick=" not in html
             assert 'maxlength="100"' in html
             assert 'maxlength="254"' in html
+            assert 'pattern="[^@\\s]+@[^@\\s]+\\.[^@\\s]+"' in html
 
     def test_generates_placeholder(self):
         config = _make_config()

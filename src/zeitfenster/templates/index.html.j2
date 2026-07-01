@@ -64,7 +64,7 @@
             <input type="text" id="bf-name" name="name" required maxlength="100" placeholder="Your name">
         </label>
         <label for="bf-email">Email
-            <input type="email" id="bf-email" name="email" required maxlength="254" placeholder="your@email.com">
+            <input type="email" id="bf-email" name="email" required maxlength="254" pattern="[^@\s]+@[^@\s]+\.[^@\s]+" title="Enter an email address with a domain, for example name@example.com" placeholder="your@email.com">
         </label>
         <button type="submit">Confirm Booking</button>
     </div>

@@ -193,6 +193,7 @@ def _validate_customer_email(value: str) -> str:
     if (
         not local_part
         or not domain
+        or "." not in domain
         or domain.startswith(".")
         or domain.endswith(".")
         or ".." in domain

@@ -321,6 +321,7 @@ class TestBookEndpoint:
             ("name", "Alice\nBob", "name contains invalid characters"),
             ("email", "x", "email is too short"),
             ("email", "not-an-email", "Invalid email"),
+            ("email", "foo@bar", "Invalid email"),
             ("email", "alice bob@example.com", "Invalid email"),
             ("email", "a" * 247 + "@example.com", "email is too long"),
             ("slot_start", "2" * 65, "slot_start is too long"),
