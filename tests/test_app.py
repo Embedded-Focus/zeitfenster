@@ -405,6 +405,26 @@ class TestBookEndpoint:
         mock_regen.assert_not_called()
 
     @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    def test_rejects_malformed_slot_end(self, mock_send, client):
+        self._set_available_slot(client)
+        with patch("zeitfenster.app._regenerate", new_callable=AsyncMock) as mock_regen:
+            response = client.post(
+                "/book",
+                data={
+                    "name": "Alice",
+                    "email": "alice@example.com",
+                    "slot_start": "2026-07-06T10:00:00+02:00",
+                    "slot_end": "not-a-date",
+                    "duration": "60m",
+                    "website": "",
+                },
+            )
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Invalid slot_end"
+        mock_send.assert_not_called()
+        mock_regen.assert_not_called()
+
+    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
     def test_rejects_naive_slot_start(self, mock_send, client):
         self._set_available_slot(client)
         with patch("zeitfenster.app._regenerate", new_callable=AsyncMock) as mock_regen:
@@ -421,6 +441,26 @@ class TestBookEndpoint:
             )
         assert response.status_code == 400
         assert response.json()["detail"] == "slot_start must include a timezone"
+        mock_send.assert_not_called()
+        mock_regen.assert_not_called()
+
+    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    def test_rejects_naive_slot_end(self, mock_send, client):
+        self._set_available_slot(client)
+        with patch("zeitfenster.app._regenerate", new_callable=AsyncMock) as mock_regen:
+            response = client.post(
+                "/book",
+                data={
+                    "name": "Alice",
+                    "email": "alice@example.com",
+                    "slot_start": "2026-07-06T10:00:00+02:00",
+                    "slot_end": "2026-07-06T11:00:00",
+                    "duration": "60m",
+                    "website": "",
+                },
+            )
+        assert response.status_code == 400
+        assert response.json()["detail"] == "slot_end must include a timezone"
         mock_send.assert_not_called()
         mock_regen.assert_not_called()
 
