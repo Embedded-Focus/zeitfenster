@@ -33,10 +33,11 @@ Zeitfenster is designed around a small public surface and a secret-free frontend
 - **Read-only calendars:** the app reads CalDAV and ICS sources, but never writes to calendars. Booking requests are sent as `.ics` email attachments for manual import.
 - **Secret isolation:** Caddy serves static files and proxies selected requests, but does not receive CalDAV or SMTP credentials. Those stay in the internal Python app container.
 - **No database or sessions:** state is derived from configuration, calendar reads, generated static files, and in-memory availability.
-- **Bounded booking input:** booking form fields are normalized and size-limited before use. Names reject control characters, and customer email addresses are checked for a valid basic shape.
+- **Bounded booking input:** booking form fields are normalized and size-limited before use. Names reject control characters, and customer email addresses are checked for a valid basic shape with a dotted domain. The generated form mirrors key limits with native browser validation.
 - **Booking slot validation:** `POST /book` does not trust submitted hidden form fields by themselves. The backend parses timezone-aware datetimes, requires `slot_end > slot_start`, checks that the posted duration is configured and matches the submitted range, and requires `(duration, slot_start, slot_end)` to exactly match a currently advertised slot in memory.
 - **Booking abuse controls:** accepted booking requests pass through an in-memory global rate limit before email delivery. Booking-triggered availability regeneration is coalesced so repeated posts cannot create unlimited concurrent calendar refresh tasks. Caddy also caps `/book` request bodies.
 - **Browser hardening:** booking-page JavaScript is served as a static asset, with no inline event handlers. Caddy sends a Content Security Policy, `X-Content-Type-Options: nosniff`, and `Referrer-Policy`.
+- **User-facing validation errors:** booking form submissions are intercepted by the static JavaScript. Backend validation failures are mapped back to native browser validation messages instead of exposing raw JSON error responses to normal users.
 - **Fail-before-side-effects:** invalid, forged, stale, malformed, or timezone-naive booking requests are rejected before `.ics` generation, SMTP delivery, or availability regeneration.
 - **Federation privacy boundary:** `/api/free-slots` exposes computed free slots only. Federation members do not receive raw busy intervals or calendar event details.
 
@@ -103,6 +104,7 @@ Requirements:
 - If any member instance is unreachable, the federation shows **no slots** (fail-closed to prevent double-bookings).
 - A pure federation instance (no own calendars) works naturally — working-hour candidates are generated locally, then narrowed by intersection.
 - Federation authentication is optional on both sides. If `federation.free_slots_token_env` is set, this instance requires `Authorization: Bearer ...` for `GET /api/free-slots`. If a `zeitfenster_urls` member has `token_env`, the federation client sends that token to the member. If no inbound token is configured, `/api/free-slots` is public and computed free slots are scrapeable.
+- If a federation token environment variable is configured but missing or empty, startup/fetching fails instead of silently falling back to unauthenticated access.
 - On startup, the app logs whether `/api/free-slots` authentication is enabled.
 
 ## Configuration
