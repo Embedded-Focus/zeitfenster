@@ -40,6 +40,33 @@ email:
   smtp_password_env: TEST_SMTP_PASSWORD
 """
 
+PROTECTED_CONFIG_YAML = """\
+branding:
+  title: "Test Booking"
+
+availability:
+  calendars: []
+
+federation:
+  free_slots_token_env: FREE_SLOTS_TOKEN
+
+rules:
+  timezone: Europe/Vienna
+  working_hours:
+    mon: ["09:00-17:00"]
+  slot_durations: [60m]
+  buffer: 0m
+  minimum_notice: 0m
+  horizon: 7d
+
+email:
+  owner: owner@example.com
+  smtp_host_env: TEST_SMTP_HOST
+  smtp_port: 587
+  smtp_user_env: TEST_SMTP_USER
+  smtp_password_env: TEST_SMTP_PASSWORD
+"""
+
 
 @pytest.fixture()
 def test_env(tmp_path, monkeypatch):
@@ -82,7 +109,7 @@ def client(test_env):
 
 
 class TestFreeSlotsEndpoint:
-    def test_returns_slots_json(self, client):
+    def _set_current_slot(self, client):
         client.app.state.current_slots = {
             "60m": [
                 FreeSlot(
@@ -92,6 +119,9 @@ class TestFreeSlotsEndpoint:
                 ),
             ]
         }
+
+    def test_returns_slots_json(self, client):
+        self._set_current_slot(client)
         response = client.get("/api/free-slots")
         assert response.status_code == 200
         data = response.json()
@@ -105,6 +135,82 @@ class TestFreeSlotsEndpoint:
         response = client.get("/api/free-slots")
         assert response.status_code == 200
         assert response.json() == {"slots": {}}
+
+    def test_requires_bearer_token_when_configured(self, client, monkeypatch):
+        monkeypatch.setenv("FREE_SLOTS_TOKEN", "secret-token")
+        client.app.state.config.federation.free_slots_token_env = "FREE_SLOTS_TOKEN"
+        self._set_current_slot(client)
+
+        response = client.get("/api/free-slots")
+
+        assert response.status_code == 401
+        assert response.headers["www-authenticate"] == "Bearer"
+
+    def test_rejects_wrong_bearer_token_when_configured(self, client, monkeypatch):
+        monkeypatch.setenv("FREE_SLOTS_TOKEN", "secret-token")
+        client.app.state.config.federation.free_slots_token_env = "FREE_SLOTS_TOKEN"
+        self._set_current_slot(client)
+
+        response = client.get(
+            "/api/free-slots",
+            headers={"Authorization": "Bearer wrong-token"},
+        )
+
+        assert response.status_code == 401
+
+    def test_accepts_valid_bearer_token_when_configured(self, client, monkeypatch):
+        monkeypatch.setenv("FREE_SLOTS_TOKEN", "secret-token")
+        client.app.state.config.federation.free_slots_token_env = "FREE_SLOTS_TOKEN"
+        self._set_current_slot(client)
+
+        response = client.get(
+            "/api/free-slots",
+            headers={"Authorization": "Bearer secret-token"},
+        )
+
+        assert response.status_code == 200
+        assert len(response.json()["slots"]["60m"]) == 1
+
+    def test_logs_public_free_slots_auth_mode_on_startup(self, test_env):
+        with (
+            patch("zeitfenster.app.fetch_and_compute", return_value={"60m": []}),
+            patch("zeitfenster.app.generate_placeholder"),
+            patch("zeitfenster.app.generate_site"),
+            patch("zeitfenster.app.logger.info") as mock_info,
+            TestClient(app),
+        ):
+            pass
+
+        mock_info.assert_any_call("free_slots_auth_configured", enabled=False)
+
+    def test_logs_protected_free_slots_auth_mode_on_startup(
+        self,
+        tmp_path,
+        monkeypatch,
+    ):
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text(PROTECTED_CONFIG_YAML)
+        site_dir = tmp_path / "site"
+        site_dir.mkdir()
+
+        monkeypatch.setenv("TEST_SMTP_HOST", "localhost")
+        monkeypatch.setenv("TEST_SMTP_USER", "testuser")
+        monkeypatch.setenv("TEST_SMTP_PASSWORD", "testpass")
+        monkeypatch.setenv("FREE_SLOTS_TOKEN", "secret-token")
+
+        app.state.config_path = config_path
+        app.state.site_dir = site_dir
+
+        with (
+            patch("zeitfenster.app.fetch_and_compute", return_value={"60m": []}),
+            patch("zeitfenster.app.generate_placeholder"),
+            patch("zeitfenster.app.generate_site"),
+            patch("zeitfenster.app.logger.info") as mock_info,
+            TestClient(app),
+        ):
+            pass
+
+        mock_info.assert_any_call("free_slots_auth_configured", enabled=True)
 
 
 class TestHealthEndpoint:

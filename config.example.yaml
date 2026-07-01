@@ -22,9 +22,18 @@ availability:
 
   # Federation: other zeitfenster instances whose free slots are intersected
   # with this instance's slots. Only times available on ALL instances are shown.
+  # token_env is optional. If set, the federation client sends it as a Bearer
+  # token when fetching that member's /api/free-slots endpoint.
   # zeitfenster_urls:
   #   - url: https://alice.example.com
   #   - url: https://bob.example.com
+  #     token_env: BOB_ZEITFENSTER_TOKEN
+
+# Optional inbound authentication for this instance's /api/free-slots endpoint.
+# If omitted, /api/free-slots is public and computed free slots are scrapeable.
+# If set, requests must include: Authorization: Bearer <env value>
+# federation:
+#   free_slots_token_env: ZEITFENSTER_FREE_SLOTS_TOKEN
 
 rules:
   timezone: Europe/Vienna

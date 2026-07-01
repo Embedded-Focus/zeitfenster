@@ -19,7 +19,17 @@ def fetch_free_slots(
     url = f"{source.url.rstrip('/')}/api/free-slots"
     logger.info("fetching_zeitfenster", url=url)
 
-    with urllib.request.urlopen(url, timeout=10) as response:  # noqa: S310
+    token = source.token
+    request: str | urllib.request.Request
+    if token is None:
+        request = url
+    else:
+        request = urllib.request.Request(
+            url,
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    with urllib.request.urlopen(request, timeout=10) as response:  # noqa: S310
         data = json.loads(response.read())
 
     remote_slots: dict = data.get("slots", {})

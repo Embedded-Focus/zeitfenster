@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import urllib.request
 from datetime import timedelta
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
@@ -117,6 +118,25 @@ class TestFetchFreeSlots:
         mock_urlopen.assert_called_once_with(
             "https://example.com/api/free-slots", timeout=10
         )
+
+    def test_sends_bearer_token_when_configured(self, monkeypatch):
+        source = ZeitfensterSource(
+            url="https://example.com",
+            token_env="EXAMPLE_ZEITFENSTER_TOKEN",
+        )
+        monkeypatch.setenv("EXAMPLE_ZEITFENSTER_TOKEN", "remote-secret")
+
+        with patch(
+            "zeitfenster.zeitfenster_client.urllib.request.urlopen"
+        ) as mock_urlopen:
+            mock_urlopen.return_value = _make_response({})
+            fetch_free_slots(source, ["30m"])
+
+        request = mock_urlopen.call_args.args[0]
+        assert isinstance(request, urllib.request.Request)
+        assert request.full_url == "https://example.com/api/free-slots"
+        assert request.headers["Authorization"] == "Bearer remote-secret"
+        assert mock_urlopen.call_args.kwargs == {"timeout": 10}
 
     def test_network_error_raises(self):
         source = ZeitfensterSource(url="https://unreachable.example.com")

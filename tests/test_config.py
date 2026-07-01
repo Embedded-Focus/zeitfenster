@@ -24,6 +24,10 @@ availability:
   zeitfenster_urls:
     - url: https://alice.example.com
     - url: https://bob.example.com
+      token_env: BOB_ZEITFENSTER_TOKEN
+
+federation:
+  free_slots_token_env: INBOUND_ZEITFENSTER_TOKEN
 
 email:
   owner: test@example.com
@@ -194,6 +198,12 @@ class TestZeitfensterSource:
                 cfg.availability.zeitfenster_urls[0].url == "https://alice.example.com"
             )
             assert cfg.availability.zeitfenster_urls[1].url == "https://bob.example.com"
+            assert cfg.availability.zeitfenster_urls[0].token_env is None
+            assert (
+                cfg.availability.zeitfenster_urls[1].token_env
+                == "BOB_ZEITFENSTER_TOKEN"
+            )
+            assert cfg.federation.free_slots_token_env == "INBOUND_ZEITFENSTER_TOKEN"
         finally:
             path.unlink()
 
@@ -202,5 +212,45 @@ class TestZeitfensterSource:
         try:
             cfg = AppConfig.from_yaml(path)
             assert cfg.availability.zeitfenster_urls == []
+            assert cfg.federation.free_slots_token_env is None
+        finally:
+            path.unlink()
+
+    def test_zeitfenster_token_from_env(self, monkeypatch):
+        path = _write_yaml(FEDERATION_YAML)
+        monkeypatch.setenv("BOB_ZEITFENSTER_TOKEN", "remote-secret")
+        try:
+            cfg = AppConfig.from_yaml(path)
+            assert cfg.availability.zeitfenster_urls[0].token is None
+            assert cfg.availability.zeitfenster_urls[1].token == "remote-secret"
+        finally:
+            path.unlink()
+
+    def test_zeitfenster_token_missing_raises(self):
+        path = _write_yaml(FEDERATION_YAML)
+        try:
+            cfg = AppConfig.from_yaml(path)
+            os.environ.pop("BOB_ZEITFENSTER_TOKEN", None)
+            with pytest.raises(ValueError, match="BOB_ZEITFENSTER_TOKEN"):
+                _ = cfg.availability.zeitfenster_urls[1].token
+        finally:
+            path.unlink()
+
+    def test_free_slots_token_from_env(self, monkeypatch):
+        path = _write_yaml(FEDERATION_YAML)
+        monkeypatch.setenv("INBOUND_ZEITFENSTER_TOKEN", "inbound-secret")
+        try:
+            cfg = AppConfig.from_yaml(path)
+            assert cfg.federation.free_slots_token == "inbound-secret"
+        finally:
+            path.unlink()
+
+    def test_free_slots_token_missing_raises(self):
+        path = _write_yaml(FEDERATION_YAML)
+        try:
+            cfg = AppConfig.from_yaml(path)
+            os.environ.pop("INBOUND_ZEITFENSTER_TOKEN", None)
+            with pytest.raises(ValueError, match="INBOUND_ZEITFENSTER_TOKEN"):
+                _ = cfg.federation.free_slots_token
         finally:
             path.unlink()

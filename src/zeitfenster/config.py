@@ -38,12 +38,40 @@ class IcsUrlSource(BaseModel):
 
 class ZeitfensterSource(BaseModel):
     url: str
+    token_env: str | None = None
+
+    @property
+    def token(self) -> str | None:
+        if self.token_env is None:
+            return None
+        value = os.environ.get(self.token_env)
+        if not value:
+            raise ValueError(
+                f"Environment variable {self.token_env!r} is not set or is empty"
+            )
+        return value
 
 
 class Availability(BaseModel):
     calendars: list[CalendarSource] = []
     ics_urls: list[IcsUrlSource] = []
     zeitfenster_urls: list[ZeitfensterSource] = []
+
+
+class Federation(BaseModel):
+    free_slots_token_env: str | None = None
+
+    @property
+    def free_slots_token(self) -> str | None:
+        if self.free_slots_token_env is None:
+            return None
+        value = os.environ.get(self.free_slots_token_env)
+        if not value:
+            raise ValueError(
+                f"Environment variable {self.free_slots_token_env!r} "
+                "is not set or is empty"
+            )
+        return value
 
 
 class WorkingHours(BaseModel):
@@ -106,6 +134,7 @@ class Email(BaseModel):
 class AppConfig(BaseModel):
     branding: Branding = Branding()
     availability: Availability = Availability()
+    federation: Federation = Federation()
     rules: Rules = Rules()
     email: Email
 

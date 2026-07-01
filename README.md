@@ -87,6 +87,10 @@ availability:
   zeitfenster_urls:
     - url: https://alice.example.com
     - url: https://bob.example.com
+      token_env: BOB_ZEITFENSTER_TOKEN
+
+federation:
+  free_slots_token_env: MY_FREE_SLOTS_TOKEN
 
 email:
   owner:
@@ -98,10 +102,12 @@ Requirements:
 - All member instances and the federation must use the same `slot_durations` and compatible timezones.
 - If any member instance is unreachable, the federation shows **no slots** (fail-closed to prevent double-bookings).
 - A pure federation instance (no own calendars) works naturally — working-hour candidates are generated locally, then narrowed by intersection.
+- Federation authentication is optional on both sides. If `federation.free_slots_token_env` is set, this instance requires `Authorization: Bearer ...` for `GET /api/free-slots`. If a `zeitfenster_urls` member has `token_env`, the federation client sends that token to the member. If no inbound token is configured, `/api/free-slots` is public and computed free slots are scrapeable.
+- On startup, the app logs whether `/api/free-slots` authentication is enabled.
 
 ## Configuration
 
-Copy `config.example.yaml` and adjust to your setup. Secrets (CalDAV passwords, SMTP credentials) are referenced by environment variable name, not stored in the config file.
+Copy `config.example.yaml` and adjust to your setup. Secrets (CalDAV passwords, SMTP credentials, federation tokens) are referenced by environment variable name, not stored in the config file.
 
 See `config.example.yaml` for all available options including working hours, slot durations, buffer, minimum notice, horizon, and branding.
 

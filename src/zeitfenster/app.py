@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 import os
 from collections import deque
 from contextlib import asynccontextmanager
@@ -63,6 +64,11 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     config = AppConfig.from_yaml(config_path)
     app.state.config = config
     app.state.site_dir = site_dir
+    free_slots_auth_enabled = config.federation.free_slots_token is not None
+    logger.info(
+        "free_slots_auth_configured",
+        enabled=free_slots_auth_enabled,
+    )
 
     app.state.current_slots = {}
     app.state.booking_rate_limit_timestamps = deque()
@@ -341,8 +347,29 @@ def _serialize_slots(
     return result
 
 
+def _validate_free_slots_authorization(request: Request, config: AppConfig) -> None:
+    expected_token = config.federation.free_slots_token
+    if expected_token is None:
+        return
+
+    authorization = request.headers.get("authorization", "")
+    scheme, separator, token = authorization.partition(" ")
+    if (
+        not separator
+        or scheme.lower() != "bearer"
+        or not hmac.compare_digest(token, expected_token)
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Unauthorized",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
 @app.get("/api/free-slots")
 async def free_slots(request: Request) -> dict:
+    config: AppConfig = request.app.state.config
+    _validate_free_slots_authorization(request, config)
     current: dict[str, list[FreeSlot]] = getattr(request.app.state, "current_slots", {})
     return {"slots": _serialize_slots(current)}
 
