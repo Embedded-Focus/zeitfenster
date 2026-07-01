@@ -13,8 +13,9 @@
     {% for duration in slots_by_duration %}
     <button class="duration-tab{% if loop.first %} active{% endif %}"
             data-duration="{{ duration }}"
-            style="--duration-color: {{ duration_colors[(loop.index0) % duration_colors|length] }}; --duration-pastel: {{ duration_pastels[(loop.index0) % duration_pastels|length] }}"
-            onclick="showDuration('{{ duration }}')">{{ duration }}</button>
+            style="--duration-color: {{ duration_colors[(loop.index0) % duration_colors|length] }}; --duration-pastel: {{ duration_pastels[(loop.index0) % duration_pastels|length] }}">
+        {{ duration }}
+    </button>
     {% endfor %}
 </div>
 
@@ -33,8 +34,7 @@
                 <input type="hidden" name="slot_end" value="{{ slot.end_iso }}">
                 <input type="hidden" name="duration" value="{{ duration }}">
                 <input type="text" name="website" value="" class="honeypot" tabindex="-1" autocomplete="off">
-                <button type="button" class="outline slot-button"
-                        onclick="this.closest('article').querySelector('.booking-form') ? toggleForm(this) : insertForm(this)">
+                <button type="button" class="outline slot-button">
                     {{ slot.start_time }} – {{ slot.end_time }}
                 </button>
             </form>
@@ -70,51 +70,4 @@
     </div>
 </template>
 
-<script>
-function showDuration(duration) {
-    document.querySelectorAll('.slot-list').forEach(function(el) {
-        el.hidden = true;
-    });
-    document.querySelectorAll('.duration-tab').forEach(function(el) {
-        el.classList.remove('active');
-    });
-    document.getElementById('slots-' + duration).hidden = false;
-    document.querySelector('[data-duration="' + duration + '"]').classList.add('active');
-}
-
-function insertForm(button) {
-    document.querySelectorAll('.booking-form').forEach(function(el) {
-        el.remove();
-    });
-    document.querySelectorAll('.slot-button').forEach(function(el) {
-        el.classList.remove('contrast');
-        el.classList.add('outline');
-    });
-    var form = button.closest('form');
-    var template = document.getElementById('booking-form-template');
-    var clone = template.content.cloneNode(true);
-    var nameInput = clone.querySelector('#bf-name');
-    var emailInput = clone.querySelector('#bf-email');
-    nameInput.removeAttribute('id');
-    emailInput.removeAttribute('id');
-    nameInput.setAttribute('name', 'name');
-    emailInput.setAttribute('name', 'email');
-    form.appendChild(clone);
-    button.classList.remove('outline');
-    button.classList.add('contrast');
-    form.querySelector('input[name="name"]').focus();
-}
-
-function toggleForm(button) {
-    var form = button.closest('form');
-    var bookingForm = form.querySelector('.booking-form');
-    if (bookingForm) {
-        bookingForm.remove();
-        button.classList.remove('contrast');
-        button.classList.add('outline');
-    } else {
-        insertForm(button);
-    }
-}
-</script>
 {% endblock %}

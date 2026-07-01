@@ -94,6 +94,7 @@ class TestGenerateSite:
             assert static.exists()
             assert (static / "pico.min.css").exists()
             assert (static / "style.css").exists()
+            assert (static / "booking.js").exists()
 
             html = index.read_text()
             assert "Book a Meeting with Rainer" in html
@@ -102,6 +103,9 @@ class TestGenerateSite:
             assert "90m" in html
             assert "09:00" in html
             assert "Monday" in html
+            assert 'src="static/booking.js"' in html
+            assert "<script>" not in html
+            assert "onclick=" not in html
 
     def test_generates_placeholder(self):
         config = _make_config()
@@ -112,6 +116,7 @@ class TestGenerateSite:
             html = index.read_text()
             assert "Generating availability" in html
             assert "Book a Meeting with Rainer" in html
+            assert (Path(tmp) / "static" / "booking.js").exists()
 
     def test_empty_slots(self):
         config = _make_config()
