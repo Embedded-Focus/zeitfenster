@@ -104,6 +104,8 @@ class TestGenerateSite:
             assert 'src="static/booking.js"' in html
             assert "<script>" not in html
             assert "onclick=" not in html
+            assert 'maxlength="100"' in html
+            assert 'maxlength="254"' in html
 
     def test_generates_placeholder(self):
         config = _make_config()
@@ -115,6 +117,17 @@ class TestGenerateSite:
             assert "Generating availability" in html
             assert "Book a Meeting with Rainer" in html
             assert (Path(tmp) / "static" / "booking.js").exists()
+
+    def test_booking_script_handles_submit_errors(self):
+        config = _make_config()
+        slots = _make_fake_slots()
+        with tempfile.TemporaryDirectory() as tmp:
+            generate_site(slots, config, tmp)
+            script = (Path(tmp) / "static" / "booking.js").read_text()
+            assert 'document.addEventListener("submit"' in script
+            assert "fetch(form.action" in script
+            assert "setCustomValidity" in script
+            assert "reportValidity" in script
 
     def test_empty_slots(self):
         config = _make_config()
