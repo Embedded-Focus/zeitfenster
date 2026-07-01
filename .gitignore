@@ -19,3 +19,7 @@ tests/output/
 
 # General files
 .envrc
+.env
+.agent-circus/
+.direnv/
+
