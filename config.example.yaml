@@ -47,6 +47,8 @@ rules:
   buffer: 15m
   minimum_notice: 24h
   horizon: 60d
+  # How often calendars and federation members are refreshed.
+  refresh_interval: 15m
 
 email:
   # Single owner or list for federation:

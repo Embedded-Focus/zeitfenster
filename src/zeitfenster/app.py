@@ -25,7 +25,6 @@ CONFIG_PATH = Path(
     os.environ.get("ZEITFENSTER_CONFIG_PATH", "/etc/zeitfenster/config.yaml")
 )
 SITE_DIR = Path(os.environ.get("ZEITFENSTER_SITE_DIR", "/site"))
-REGEN_INTERVAL_SECONDS = 900
 BOOKING_RATE_LIMIT_MAX = int(os.environ.get("ZEITFENSTER_BOOKING_RATE_LIMIT_MAX", "5"))
 BOOKING_RATE_LIMIT_WINDOW_SECONDS = int(
     os.environ.get("ZEITFENSTER_BOOKING_RATE_LIMIT_WINDOW_SECONDS", "300")
@@ -48,9 +47,16 @@ async def _regenerate(app_instance: FastAPI) -> None:
         logger.exception("regeneration_failed")
 
 
+def _refresh_interval_seconds(config: AppConfig) -> float:
+    seconds = parse_duration(config.rules.refresh_interval).total_seconds()
+    if seconds <= 0:
+        raise ValueError("rules.refresh_interval must be greater than 0")
+    return seconds
+
+
 async def _periodic_regeneration(app_instance: FastAPI) -> None:
     while True:
-        await asyncio.sleep(REGEN_INTERVAL_SECONDS)
+        await asyncio.sleep(app_instance.state.refresh_interval_seconds)
         await _regenerate(app_instance)
 
 
@@ -62,6 +68,12 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     config = AppConfig.from_yaml(config_path)
     app.state.config = config
     app.state.site_dir = site_dir
+    app.state.refresh_interval_seconds = _refresh_interval_seconds(config)
+    logger.info(
+        "refresh_interval_configured",
+        interval=config.rules.refresh_interval,
+        interval_seconds=app.state.refresh_interval_seconds,
+    )
     free_slots_auth_enabled = config.federation.free_slots_token is not None
     logger.info(
         "free_slots_auth_configured",

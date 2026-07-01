@@ -65,6 +65,36 @@ email:
   smtp_password_env: TEST_SMTP_PASSWORD
 """
 
+CUSTOM_REFRESH_CONFIG_YAML = """\
+branding:
+  title: "Test Booking"
+
+availability:
+  calendars: []
+
+rules:
+  timezone: Europe/Vienna
+  working_hours:
+    mon: ["09:00-17:00"]
+  slot_durations: [60m]
+  buffer: 0m
+  minimum_notice: 0m
+  horizon: 7d
+  refresh_interval: 2m
+
+email:
+  owner: owner@example.com
+  smtp_host_env: TEST_SMTP_HOST
+  smtp_port: 587
+  smtp_user_env: TEST_SMTP_USER
+  smtp_password_env: TEST_SMTP_PASSWORD
+"""
+
+ZERO_REFRESH_CONFIG_YAML = CUSTOM_REFRESH_CONFIG_YAML.replace(
+    "refresh_interval: 2m",
+    "refresh_interval: 0m",
+)
+
 
 @pytest.fixture()
 def test_env(tmp_path, monkeypatch):
@@ -209,6 +239,51 @@ class TestFreeSlotsEndpoint:
             pass
 
         mock_info.assert_any_call("free_slots_auth_configured", enabled=True)
+
+
+class TestRefreshInterval:
+    def _write_config(self, tmp_path, monkeypatch, content):
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text(content)
+        site_dir = tmp_path / "site"
+        site_dir.mkdir()
+
+        monkeypatch.setenv("TEST_SMTP_HOST", "localhost")
+        monkeypatch.setenv("TEST_SMTP_USER", "testuser")
+        monkeypatch.setenv("TEST_SMTP_PASSWORD", "testpass")
+
+        app.state.config_path = config_path
+        app.state.site_dir = site_dir
+
+    def test_lifespan_uses_configured_refresh_interval(self, tmp_path, monkeypatch):
+        self._write_config(tmp_path, monkeypatch, CUSTOM_REFRESH_CONFIG_YAML)
+
+        with (
+            patch("zeitfenster.app.fetch_and_compute", return_value={"60m": []}),
+            patch("zeitfenster.app.generate_placeholder"),
+            patch("zeitfenster.app.generate_site"),
+            patch("zeitfenster.app.logger.info") as mock_info,
+            TestClient(app),
+        ):
+            assert app.state.refresh_interval_seconds == 120.0
+
+        mock_info.assert_any_call(
+            "refresh_interval_configured",
+            interval="2m",
+            interval_seconds=120.0,
+        )
+
+    def test_lifespan_rejects_zero_refresh_interval(self, tmp_path, monkeypatch):
+        self._write_config(tmp_path, monkeypatch, ZERO_REFRESH_CONFIG_YAML)
+
+        with (
+            patch("zeitfenster.app.fetch_and_compute", return_value={"60m": []}),
+            patch("zeitfenster.app.generate_placeholder"),
+            patch("zeitfenster.app.generate_site"),
+            pytest.raises(ValueError, match="refresh_interval"),
+        ):
+            with TestClient(app):
+                pass
 
 
 class TestHealthEndpoint:

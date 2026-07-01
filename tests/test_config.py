@@ -62,6 +62,7 @@ rules:
   buffer: 15m
   minimum_notice: 24h
   horizon: 60d
+  refresh_interval: 10m
 
 email:
   owner: owner@example.com
@@ -89,6 +90,7 @@ class TestMinimalConfig:
             assert cfg.branding.colors.primary == "#2563eb"
             assert cfg.rules.timezone == "UTC"
             assert cfg.rules.slot_durations == ["30m"]
+            assert cfg.rules.refresh_interval == "15m"
             assert cfg.availability.calendars == []
         finally:
             path.unlink()
@@ -118,6 +120,7 @@ class TestFullConfig:
             assert cfg.rules.slot_durations == ["30m", "60m", "90m"]
             assert cfg.rules.buffer == "15m"
             assert cfg.rules.horizon == "60d"
+            assert cfg.rules.refresh_interval == "10m"
             assert cfg.email.owner == "owner@example.com"
             assert cfg.email.smtp_port == 465
         finally:

@@ -6,7 +6,7 @@ The application never writes to any calendar. You stay in control of every booki
 
 ## How It Works
 
-1. A background task periodically reads your calendars — CalDAV, ICS feeds, or both (read-only).
+1. A background task periodically reads your calendars — CalDAV, ICS feeds, or both (read-only). The default refresh interval is 15 minutes and can be changed with `rules.refresh_interval`.
 2. Free slots are computed based on your working hours, buffer, and other rules.
 3. A static HTML page is generated and served by Caddy.
 4. When a customer books a slot, a small FastAPI endpoint sends you an email with an `.ics` attachment.
@@ -111,7 +111,7 @@ Requirements:
 
 Copy `config.example.yaml` and adjust to your setup. Secrets (CalDAV passwords, SMTP credentials, federation tokens) are referenced by environment variable name, not stored in the config file.
 
-See `config.example.yaml` for all available options including working hours, slot durations, buffer, minimum notice, horizon, and branding.
+See `config.example.yaml` for all available options including working hours, slot durations, buffer, minimum notice, horizon, refresh interval, and branding.
 
 ## Development
 

@@ -89,6 +89,7 @@ class Rules(BaseModel):
     buffer: str = "15m"
     minimum_notice: str = "24h"
     horizon: str = "60d"
+    refresh_interval: str = "15m"
 
 
 class Email(BaseModel):
