@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import os
+from collections import deque
 from contextlib import asynccontextmanager
 from datetime import datetime
 from email.utils import parseaddr
 from pathlib import Path
+from time import monotonic
 
 import structlog
 from fastapi import FastAPI, Form, HTTPException, Request
@@ -25,6 +27,10 @@ CONFIG_PATH = Path(
 )
 SITE_DIR = Path(os.environ.get("ZEITFENSTER_SITE_DIR", "/site"))
 REGEN_INTERVAL_SECONDS = 900
+BOOKING_RATE_LIMIT_MAX = int(os.environ.get("ZEITFENSTER_BOOKING_RATE_LIMIT_MAX", "5"))
+BOOKING_RATE_LIMIT_WINDOW_SECONDS = int(
+    os.environ.get("ZEITFENSTER_BOOKING_RATE_LIMIT_WINDOW_SECONDS", "300")
+)
 MAX_NAME_LENGTH = 100
 MAX_EMAIL_LENGTH = 254
 MAX_DATETIME_LENGTH = 64
@@ -59,6 +65,8 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     app.state.site_dir = site_dir
 
     app.state.current_slots = {}
+    app.state.booking_rate_limit_timestamps = deque()
+    app.state.regeneration_task = None
 
     generate_placeholder(config, site_dir)
 
@@ -75,10 +83,20 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
         yield
     finally:
         task.cancel()
+        scheduled: asyncio.Task[None] | None = getattr(
+            app.state, "regeneration_task", None
+        )
+        if scheduled is not None and not scheduled.done():
+            scheduled.cancel()
         try:
             await task
         except asyncio.CancelledError:
             pass
+        if scheduled is not None:
+            try:
+                await scheduled
+            except asyncio.CancelledError:
+                pass
 
 
 app = FastAPI(lifespan=lifespan)
@@ -89,6 +107,41 @@ def _read_thankyou(site_dir: Path) -> str:
     if thankyou_path.exists():
         return thankyou_path.read_text()
     return "<html><body><h1>Thank you!</h1><p>Your booking request has been received.</p></body></html>"
+
+
+async def _run_scheduled_regeneration(app_instance: FastAPI) -> None:
+    try:
+        await _regenerate(app_instance)
+    finally:
+        app_instance.state.regeneration_task = None
+
+
+def _schedule_regeneration(app_instance: FastAPI) -> None:
+    existing: asyncio.Task[None] | None = getattr(
+        app_instance.state, "regeneration_task", None
+    )
+    if existing is not None and not existing.done():
+        return
+    app_instance.state.regeneration_task = asyncio.create_task(
+        _run_scheduled_regeneration(app_instance)
+    )
+
+
+def _enforce_booking_rate_limit(app_instance: FastAPI) -> None:
+    timestamps: deque[float] = getattr(
+        app_instance.state, "booking_rate_limit_timestamps", deque()
+    )
+    app_instance.state.booking_rate_limit_timestamps = timestamps
+
+    now = monotonic()
+    window_start = now - BOOKING_RATE_LIMIT_WINDOW_SECONDS
+    while timestamps and timestamps[0] <= window_start:
+        timestamps.popleft()
+
+    if len(timestamps) >= BOOKING_RATE_LIMIT_MAX:
+        raise HTTPException(status_code=429, detail="Too many booking requests")
+
+    timestamps.append(now)
 
 
 def _has_control_characters(value: str) -> bool:
@@ -154,13 +207,17 @@ def _validate_booking_form_fields(
     duration: str,
     website: str,
 ) -> tuple[str, str, str, str, str, str]:
+    validated_website = _validate_bounded_field(website, "website", MAX_HONEYPOT_LENGTH)
+    if validated_website:
+        return ("", "", "", "", "", validated_website)
+
     return (
         _validate_customer_name(name),
         _validate_customer_email(email),
         _validate_bounded_field(slot_start, "slot_start", MAX_DATETIME_LENGTH),
         _validate_bounded_field(slot_end, "slot_end", MAX_DATETIME_LENGTH),
         _validate_bounded_field(duration, "duration", MAX_DURATION_LENGTH),
-        _validate_bounded_field(website, "website", MAX_HONEYPOT_LENGTH),
+        validated_website,
     )
 
 
@@ -232,7 +289,7 @@ async def book(
     )
 
     if website:
-        logger.info("honeypot_triggered", name=name)
+        logger.info("honeypot_triggered")
         return HTMLResponse(_read_thankyou(site_dir))
 
     start = _parse_booking_datetime(slot_start, "slot_start")
@@ -244,6 +301,7 @@ async def book(
         start=start,
         end=end,
     )
+    _enforce_booking_rate_limit(request.app)
 
     slot_summary = f"{start.strftime('%A, %B %-d %Y %H:%M')} – {end.strftime('%H:%M')}"
 
@@ -267,7 +325,7 @@ async def book(
     except Exception:
         logger.exception("email_send_failed", customer=email, slot=slot_summary)
 
-    asyncio.create_task(_regenerate(request.app))
+    _schedule_regeneration(request.app)
 
     return HTMLResponse(_read_thankyou(site_dir))
 

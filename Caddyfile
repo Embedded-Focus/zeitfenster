@@ -5,6 +5,9 @@
 		method POST
 		path /book
 	}
+	request_body @booking {
+		max_size 10KB
+	}
 	reverse_proxy @booking app:8000
 
 	@health {

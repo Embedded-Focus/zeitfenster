@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, patch
 from zoneinfo import ZoneInfo
@@ -7,6 +8,7 @@ from zoneinfo import ZoneInfo
 import pytest
 from fastapi.testclient import TestClient
 
+import zeitfenster.app as app_module
 from zeitfenster.app import app
 from zeitfenster.availability import FreeSlot
 from zeitfenster.config import AppConfig
@@ -189,6 +191,24 @@ class TestBookEndpoint:
         assert "Thank you" in response.text
         mock_send.assert_not_called()
 
+    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    def test_honeypot_does_not_validate_other_fields_or_regenerate(
+        self, mock_send, client
+    ):
+        with patch("zeitfenster.app._regenerate", new_callable=AsyncMock) as mock_regen:
+            response = client.post(
+                "/book",
+                data=self._valid_booking_data(
+                    name="A" * 101,
+                    email="not-an-email",
+                    website="http://spam.example.com",
+                ),
+            )
+        assert response.status_code == 200
+        assert "Thank you" in response.text
+        mock_send.assert_not_called()
+        mock_regen.assert_not_called()
+
     @pytest.mark.parametrize(
         ("field", "value", "detail"),
         [
@@ -217,6 +237,42 @@ class TestBookEndpoint:
         assert response.json()["detail"] == detail
         mock_send.assert_not_called()
         mock_regen.assert_not_called()
+
+    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    def test_rate_limit_blocks_repeated_valid_bookings(
+        self, mock_send, client, monkeypatch
+    ):
+        self._set_available_slot(client)
+        monkeypatch.setattr(app_module, "BOOKING_RATE_LIMIT_MAX", 2)
+        monkeypatch.setattr(app_module, "BOOKING_RATE_LIMIT_WINDOW_SECONDS", 300)
+
+        with patch("zeitfenster.app._regenerate", new_callable=AsyncMock) as mock_regen:
+            first = client.post("/book", data=self._valid_booking_data())
+            second = client.post("/book", data=self._valid_booking_data())
+            third = client.post("/book", data=self._valid_booking_data())
+
+        assert first.status_code == 200
+        assert second.status_code == 200
+        assert third.status_code == 429
+        assert third.json()["detail"] == "Too many booking requests"
+        assert mock_send.await_count == 2
+        assert mock_regen.await_count <= 2
+
+    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    def test_repeated_valid_bookings_coalesce_regeneration(self, mock_send, client):
+        self._set_available_slot(client)
+
+        async def slow_regenerate(_app):
+            await asyncio.sleep(0.05)
+
+        with patch("zeitfenster.app._regenerate", side_effect=slow_regenerate) as regen:
+            first = client.post("/book", data=self._valid_booking_data())
+            second = client.post("/book", data=self._valid_booking_data())
+
+        assert first.status_code == 200
+        assert second.status_code == 200
+        assert mock_send.await_count == 2
+        assert regen.call_count == 1
 
     @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
     def test_rejects_slot_not_in_current_availability(self, mock_send, client):
