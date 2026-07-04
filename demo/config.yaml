@@ -1,5 +1,5 @@
 branding:
-  title: "Book a Meeting with Jane Doe"
+  title: "Book a Meeting"
   colors:
     primary: "#0d6efd"
     background: "#ffffff"
@@ -13,6 +13,9 @@ availability:
     - url: http://radicale:5232/reader/personal/
       username: reader
       password_env: CALDAV_PASSWORD
+booking:
+  owner_name: "Jane Doe"
+  summary_template: "{customer_name} and {owner_name}"
 
 rules:
   timezone: Europe/Vienna
@@ -29,6 +32,7 @@ rules:
 
 email:
   owner: jane.doe@example.com
+  from_name: Zeitfenster
   smtp_host_env: SMTP_HOST
   smtp_port: 1025
   smtp_user_env: SMTP_USER

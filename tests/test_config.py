@@ -52,6 +52,14 @@ availability:
   ics_urls:
     - url: https://calendar.google.com/calendar/ical/test/basic.ics
 
+booking:
+  location: https://meet.example.com/room
+  owner_name: "Jane Doe"
+  summary_template: "{customer_name} and {owner_name}"
+  description_template: |
+    Booking request from {customer_name} <{customer_email}>.
+    Meeting link is already configured.
+
 rules:
   timezone: Europe/Vienna
   working_hours:
@@ -66,6 +74,7 @@ rules:
 
 email:
   owner: owner@example.com
+  from_name: "Booking Bot"
   smtp_host_env: TEST_SMTP_HOST
   smtp_port: 465
   smtp_user_env: TEST_SMTP_USER
@@ -92,6 +101,10 @@ class TestMinimalConfig:
             assert cfg.rules.slot_durations == ["30m"]
             assert cfg.rules.refresh_interval == "15m"
             assert cfg.availability.calendars == []
+            assert cfg.booking.location is None
+            assert cfg.booking.owner_name is None
+            assert cfg.booking.summary_template == "{customer_name}"
+            assert cfg.booking.description_template == ""
         finally:
             path.unlink()
 
@@ -121,8 +134,30 @@ class TestFullConfig:
             assert cfg.rules.buffer == "15m"
             assert cfg.rules.horizon == "60d"
             assert cfg.rules.refresh_interval == "10m"
+            assert cfg.booking.location == "https://meet.example.com/room"
+            assert cfg.booking.owner_name == "Jane Doe"
+            assert cfg.booking.summary_template == "{customer_name} and {owner_name}"
+            assert "Meeting link is already configured." in (
+                cfg.booking.description_template
+            )
             assert cfg.email.owner == "owner@example.com"
+            assert cfg.email.from_name == "Booking Bot"
             assert cfg.email.smtp_port == 465
+        finally:
+            path.unlink()
+
+    def test_rejects_unknown_booking_template_fields(self):
+        path = _write_yaml(
+            """\
+booking:
+  summary_template: "{customer_name} and {calendar_name}"
+email:
+  owner: owner@example.com
+"""
+        )
+        try:
+            with pytest.raises(ValueError, match="calendar_name"):
+                AppConfig.from_yaml(path)
         finally:
             path.unlink()
 
@@ -177,6 +212,7 @@ class TestOwnerList:
         try:
             cfg = AppConfig.from_yaml(path)
             assert cfg.email.owner == "test@example.com"
+            assert cfg.email.from_name == "Zeitfenster"
             assert cfg.email.owner_list == ["test@example.com"]
         finally:
             path.unlink()

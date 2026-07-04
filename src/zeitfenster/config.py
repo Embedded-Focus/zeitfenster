@@ -1,9 +1,32 @@
 import os
+from string import Formatter
 from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, field_validator, model_validator
+
+DESCRIPTION_TEMPLATE_FIELDS = {"customer_name", "customer_email"}
+SUMMARY_TEMPLATE_FIELDS = {
+    "customer_name",
+    "customer_email",
+    "owner_name",
+    "owner_email",
+}
+
+
+def _validate_template_fields(
+    value: str,
+    *,
+    allowed_fields: set[str],
+) -> str:
+    for _, field_name, _, _ in Formatter().parse(value):
+        if field_name is not None and field_name not in allowed_fields:
+            allowed = ", ".join(sorted(allowed_fields))
+            raise ValueError(
+                f"Unknown template field {field_name!r}. Allowed fields: {allowed}"
+            )
+    return value
 
 
 class BrandingColors(BaseModel):
@@ -72,6 +95,29 @@ class Federation(BaseModel):
         return value
 
 
+class Booking(BaseModel):
+    location: str | None = None
+    owner_name: str | None = None
+    summary_template: str = "{customer_name}"
+    description_template: str = ""
+
+    @field_validator("summary_template")
+    @classmethod
+    def _validate_summary_template(cls, value: str) -> str:
+        return _validate_template_fields(
+            value,
+            allowed_fields=SUMMARY_TEMPLATE_FIELDS,
+        )
+
+    @field_validator("description_template")
+    @classmethod
+    def _validate_description_template(cls, value: str) -> str:
+        return _validate_template_fields(
+            value,
+            allowed_fields=DESCRIPTION_TEMPLATE_FIELDS,
+        )
+
+
 class WorkingHours(BaseModel):
     mon: list[str] = []
     tue: list[str] = []
@@ -94,6 +140,7 @@ class Rules(BaseModel):
 
 class Email(BaseModel):
     owner: str | list[str]
+    from_name: str = "Zeitfenster"
     smtp_host_env: str = "SMTP_HOST"
     smtp_port: int = 587
     smtp_user_env: str = "SMTP_USER"
@@ -134,6 +181,7 @@ class AppConfig(BaseModel):
     branding: Branding = Branding()
     availability: Availability = Availability()
     federation: Federation = Federation()
+    booking: Booking = Booking()
     rules: Rules = Rules()
     email: Email
 

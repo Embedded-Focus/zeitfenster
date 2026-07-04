@@ -1,16 +1,18 @@
 # Zeitfenster
 
-Minimal, self-hosted appointment booking service. Reads existing calendars (CalDAV, ICS feeds) to compute availability and presents free slots on a web page. Customers pick a slot and submit their contact details — you receive an email with an `.ics` file to import and send a calendar invitation.
+Minimal, self-hosted appointment request service. Reads existing calendars (CalDAV, ICS feeds) to compute availability and presents free slots on a web page. Customers pick a slot and submit their contact details — you receive an email with an `.ics` draft event to import, edit, and use for the calendar invitation.
 
-The application never writes to any calendar. You stay in control of every booking.
+The application never writes to any calendar. You stay in control of every meeting request.
 
 ## How It Works
 
 1. A background task periodically reads your calendars — CalDAV, ICS feeds, or both (read-only). The default refresh interval is 15 minutes and can be changed with `rules.refresh_interval`.
 2. Free slots are computed based on your working hours, buffer, and other rules.
 3. A static HTML page is generated and served by Caddy.
-4. When a customer books a slot, a small FastAPI endpoint sends you an email with an `.ics` attachment.
-5. You import the `.ics` — your calendar client sends the invitation to the customer.
+4. When a customer requests a slot, a small FastAPI endpoint sends you an email with an `.ics` attachment.
+5. You import the `.ics` draft, add final meeting details or meeting links, and send the actual invitation from your calendar client.
+
+The attached `.ics` files are drafts for the owner. Importing them into the owner's calendar does not send invitations by itself; customer invitations are sent separately from your calendar client after you have reviewed and edited the event.
 
 ## Architecture
 
@@ -30,15 +32,15 @@ Two containers in production:
 
 Zeitfenster is designed around a small public surface and a secret-free frontend container.
 
-- **Read-only calendars:** the app reads CalDAV and ICS sources, but never writes to calendars. Booking requests are sent as `.ics` email attachments for manual import.
+- **Read-only calendars:** the app reads CalDAV and ICS sources, but never writes to calendars. Meeting requests are sent as draft `.ics` email attachments for manual import.
 - **Secret isolation:** Caddy serves static files and proxies selected requests, but does not receive CalDAV or SMTP credentials. Those stay in the internal Python app container.
 - **No database or sessions:** state is derived from configuration, calendar reads, generated static files, and in-memory availability.
 - **Bounded booking input:** booking form fields are normalized and size-limited before use. Names reject control characters, and customer email addresses are checked for a valid basic shape with a dotted domain. The generated form mirrors key limits with native browser validation.
 - **Booking slot validation:** `POST /book` does not trust submitted hidden form fields by themselves. The backend parses timezone-aware datetimes, requires `slot_end > slot_start`, checks that the posted duration is configured and matches the submitted range, and requires `(duration, slot_start, slot_end)` to exactly match a currently advertised slot in memory.
-- **Booking abuse controls:** accepted booking requests pass through an in-memory global rate limit before email delivery. Booking-triggered availability regeneration is coalesced so repeated posts cannot create unlimited concurrent calendar refresh tasks. Caddy also caps `/book` request bodies.
+- **Request abuse controls:** accepted meeting requests pass through an in-memory global rate limit before email delivery. Request-triggered availability regeneration is coalesced so repeated posts cannot create unlimited concurrent calendar refresh tasks. Caddy also caps `/book` request bodies.
 - **Browser hardening:** booking-page JavaScript is served as a static asset, with no inline event handlers. Caddy sends a Content Security Policy, `X-Content-Type-Options: nosniff`, and `Referrer-Policy`.
 - **User-facing validation errors:** booking form submissions are intercepted by the static JavaScript. Backend validation failures are mapped back to native browser validation messages instead of exposing raw JSON error responses to normal users.
-- **Fail-before-side-effects:** invalid, forged, stale, malformed, or timezone-naive booking requests are rejected before `.ics` generation, SMTP delivery, or availability regeneration.
+- **Fail-before-side-effects:** invalid, forged, stale, malformed, or timezone-naive meeting requests are rejected before `.ics` generation, SMTP delivery, or availability regeneration.
 - **Federation privacy boundary:** `/api/free-slots` exposes computed free slots only. Federation members do not receive raw busy intervals or calendar event details.
 
 ## Quick Start (Demo)
@@ -64,7 +66,7 @@ src/zeitfenster/
 ├── config.py               Pydantic config (YAML + env vars)
 ├── email.py                SMTP email with .ics attachment (multi-recipient)
 ├── generator.py            Static site generator (Jinja2 → HTML)
-├── ics.py                  .ics file builder (VEVENT with ATTENDEE)
+├── ics.py                  .ics file builder (owner-side draft VEVENT)
 ├── parsing.py              Duration and time range parsing
 ├── templates/              Jinja2 templates (base, index, thankyou, placeholder)
 └── static/                 Pico CSS + custom styles
@@ -111,7 +113,11 @@ Requirements:
 
 Copy `config.example.yaml` and adjust to your setup. Secrets (CalDAV passwords, SMTP credentials, federation tokens) are referenced by environment variable name, not stored in the config file.
 
-See `config.example.yaml` for all available options including working hours, slot durations, buffer, minimum notice, horizon, refresh interval, and branding.
+See `config.example.yaml` for all available options including working hours, slot durations, buffer, minimum notice, horizon, refresh interval, branding, and owner-side booking event text/location.
+
+The public page title is configured separately from generated calendar event text. Use `branding.title` for the booking page heading, and `booking.owner_name` plus `booking.summary_template` for the `.ics` event subject.
+
+Owner notification emails use `email.from_name` as the display name for the SMTP sender, defaulting to `Zeitfenster <SMTP_USER>`.
 
 ## Development
 

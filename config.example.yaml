@@ -35,6 +35,19 @@ availability:
 # federation:
 #   free_slots_token_env: ZEITFENSTER_FREE_SLOTS_TOKEN
 
+booking:
+  # Optional location for the owner-side draft event. This can be a permanent
+  # meeting room URL, a physical location, or omitted for manual editing.
+  location: https://meet.example.com/my-room
+  # Optional display name for the owner in generated calendar content.
+  owner_name: "Jane Doe"
+  # Subject/title for the generated owner-side .ics event.
+  # Available placeholders: {customer_name}, {customer_email}, {owner_name}, {owner_email}
+  summary_template: "{customer_name} and {owner_name}"
+  # Body text for the generated owner-side .ics event.
+  # Available placeholders: {customer_name}, {customer_email}
+  description_template: ""
+
 rules:
   timezone: Europe/Vienna
   working_hours:
@@ -56,6 +69,7 @@ email:
   owner:
     - alice@example.com
     - bob@example.com
+  from_name: Zeitfenster
   smtp_host_env: SMTP_HOST
   smtp_port: 587
   smtp_user_env: SMTP_USER

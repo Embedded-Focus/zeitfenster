@@ -107,6 +107,11 @@ class TestGenerateSite:
             assert 'maxlength="100"' in html
             assert 'maxlength="254"' in html
             assert 'pattern="[^@\\s]+@[^@\\s]+\\.[^@\\s]+"' in html
+            assert "Request this slot" in html
+            assert "Send Request" in html
+            thankyou_html = thankyou.read_text()
+            assert "Your meeting request has been received." in thankyou_html
+            assert "not confirmed" in thankyou_html
 
     def test_generates_placeholder(self):
         config = _make_config()

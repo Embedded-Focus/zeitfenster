@@ -122,7 +122,7 @@ def _read_thankyou(site_dir: Path) -> str:
     thankyou_path = site_dir / "thankyou.html"
     if thankyou_path.exists():
         return thankyou_path.read_text()
-    return "<html><body><h1>Thank you!</h1><p>Your booking request has been received.</p></body></html>"
+    return "<html><body><h1>Thank you!</h1><p>Your meeting request has been received.</p><p>The meeting is not confirmed until you receive a calendar invitation.</p></body></html>"
 
 
 async def _run_scheduled_regeneration(app_instance: FastAPI) -> None:
@@ -324,11 +324,14 @@ async def book(
 
     ics_data = build_booking_ics(
         owner_email=config.email.owner_list[0],
+        owner_name=config.booking.owner_name,
         customer_name=name,
         customer_email=email,
         start=start,
         end=end,
-        title=config.branding.title,
+        summary_template=config.booking.summary_template,
+        location=config.booking.location,
+        description_template=config.booking.description_template,
     )
 
     try:
