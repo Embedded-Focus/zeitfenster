@@ -154,6 +154,35 @@ class TestComputeFreeSlots:
         assert 9 in slot_starts
         assert 11 in slot_starts
 
+    def test_mixed_naive_and_aware_busy_intervals_are_normalized(self):
+        fake_now = _dt(2026, 6, 28, 12, 0)
+        config = _make_config(
+            slot_durations=["60m"],
+            minimum_notice="0m",
+            horizon="2d",
+            working_hours={"mon": ["09:00-13:00"]},
+        )
+        busy = [
+            BusyInterval(
+                start=datetime(2026, 6, 29, 9, 0),
+                end=datetime(2026, 6, 29, 10, 0),
+            ),
+            BusyInterval(
+                start=datetime(2026, 6, 29, 8, 0, tzinfo=ZoneInfo("UTC")),
+                end=datetime(2026, 6, 29, 9, 0, tzinfo=ZoneInfo("UTC")),
+            ),
+        ]
+        with patch("zeitfenster.availability.datetime") as mock_dt:
+            mock_dt.now.return_value = fake_now
+            mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
+            result = compute_free_slots(busy, config)
+
+        slot_starts = [s.start.hour for s in result["60m"]]
+        assert 9 not in slot_starts
+        assert 10 not in slot_starts
+        assert 11 in slot_starts
+        assert 12 in slot_starts
+
     def test_buffer_removes_adjacent_slots(self):
         fake_now = _dt(2026, 6, 28, 12, 0)
         config = _make_config(

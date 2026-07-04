@@ -47,6 +47,25 @@ def apply_buffer(
     return buffered
 
 
+def _normalize_datetime(value: datetime, tz: ZoneInfo) -> datetime:
+    if value.tzinfo is None or value.utcoffset() is None:
+        return value.replace(tzinfo=tz)
+    return value.astimezone(tz)
+
+
+def _normalize_busy_intervals(
+    intervals: list[BusyInterval],
+    tz: ZoneInfo,
+) -> list[BusyInterval]:
+    return [
+        BusyInterval(
+            start=_normalize_datetime(iv.start, tz),
+            end=_normalize_datetime(iv.end, tz),
+        )
+        for iv in intervals
+    ]
+
+
 def _get_working_ranges(
     working_hours: WorkingHours, day: datetime
 ) -> list[tuple[datetime, datetime]]:
@@ -107,7 +126,8 @@ def compute_free_slots(
     minimum_notice = parse_duration(config.rules.minimum_notice)
     horizon = parse_duration(config.rules.horizon)
 
-    buffered = apply_buffer(busy_intervals, buffer)
+    normalized_busy = _normalize_busy_intervals(busy_intervals, tz)
+    buffered = apply_buffer(normalized_busy, buffer)
     merged = merge_intervals(buffered)
 
     now = datetime.now(tz)
