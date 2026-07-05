@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime, time, tzinfo
 
 import caldav  # type: ignore[import-untyped]
 import structlog
@@ -22,6 +22,7 @@ class BusyInterval:
 
 def _extract_busy_intervals(
     event: caldav.CalendarObjectResource,
+    default_timezone: tzinfo | None = None,
 ) -> list[BusyInterval]:
     intervals: list[BusyInterval] = []
     ical = event.icalendar_instance
@@ -34,11 +35,22 @@ def _extract_busy_intervals(
         dtend = component.get("dtend")
         if dtstart is None or dtend is None:
             continue
-        start = dtstart.dt
-        end = dtend.dt
-        if isinstance(start, datetime) and isinstance(end, datetime):
+        start = _coerce_calendar_datetime(dtstart.dt, default_timezone)
+        end = _coerce_calendar_datetime(dtend.dt, default_timezone)
+        if start is not None and end is not None:
             intervals.append(BusyInterval(start=start, end=end))
     return intervals
+
+
+def _coerce_calendar_datetime(
+    value: date | datetime,
+    default_timezone: tzinfo | None = None,
+) -> datetime | None:
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, date):
+        return datetime.combine(value, time.min, tzinfo=default_timezone)
+    return None
 
 
 def fetch_busy_intervals(
@@ -67,6 +79,6 @@ def fetch_busy_intervals(
     )
     intervals: list[BusyInterval] = []
     for event in events:
-        intervals.extend(_extract_busy_intervals(event))
+        intervals.extend(_extract_busy_intervals(event, range_start.tzinfo))
     logger.info("fetched_events", url=source.url, count=len(intervals))
     return intervals

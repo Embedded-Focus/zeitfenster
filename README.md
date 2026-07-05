@@ -14,6 +14,8 @@ The application never writes to any calendar. You stay in control of every meeti
 
 The attached `.ics` files are drafts for the owner. Importing them into the owner's calendar does not send invitations by itself; customer invitations are sent separately from your calendar client after you have reviewed and edited the event.
 
+All-day calendar events are treated as busy for the full local day. Multi-day all-day events, such as vacations, block every working-hour slot they cover.
+
 ## Architecture
 
 ```

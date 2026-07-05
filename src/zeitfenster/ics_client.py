@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime, time, tzinfo
 
 import httpx2
 import recurring_ical_events
@@ -10,6 +10,17 @@ from zeitfenster.config import IcsUrlSource
 
 logger = structlog.get_logger()
 ICS_FETCH_TIMEOUT_SECONDS = 10.0
+
+
+def _coerce_calendar_datetime(
+    value: date | datetime,
+    default_timezone: tzinfo | None = None,
+) -> datetime | None:
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, date):
+        return datetime.combine(value, time.min, tzinfo=default_timezone)
+    return None
 
 
 def fetch_busy_intervals_ics(
@@ -42,9 +53,9 @@ def fetch_busy_intervals_ics(
         dtend = component.get("dtend")
         if dtstart is None or dtend is None:
             continue
-        start = dtstart.dt
-        end = dtend.dt
-        if isinstance(start, datetime) and isinstance(end, datetime):
+        start = _coerce_calendar_datetime(dtstart.dt, range_start.tzinfo)
+        end = _coerce_calendar_datetime(dtend.dt, range_start.tzinfo)
+        if start is not None and end is not None:
             intervals.append(BusyInterval(start=start, end=end))
 
     logger.info("fetched_ics", url=source.url, count=len(intervals))

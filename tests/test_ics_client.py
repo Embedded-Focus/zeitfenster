@@ -99,13 +99,15 @@ class TestFetchBusyIntervalsIcs:
         )
         assert len(intervals) == 5
 
-    def test_allday_events_skipped(self):
+    def test_allday_events_block_full_day(self):
         intervals = _fetch(
             ALLDAY_ICS,
             datetime(2026, 7, 1, tzinfo=TZ),
             datetime(2026, 7, 2, tzinfo=TZ),
         )
-        assert len(intervals) == 0
+        assert len(intervals) == 1
+        assert intervals[0].start == datetime(2026, 7, 1, tzinfo=TZ)
+        assert intervals[0].end == datetime(2026, 7, 2, tzinfo=TZ)
 
     def test_no_events(self):
         intervals = _fetch(
