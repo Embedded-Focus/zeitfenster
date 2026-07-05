@@ -1,6 +1,7 @@
 SERVICE_CREDS   ?= .env
 IMAGE           ?= registry.example.com/zeitfenster/zeitfenster
 TAG             ?= 1.0.0
+UV_LINK_MODE    ?= copy
 .DEFAULT_GOAL   := help
 
 .PHONY: help install test lint build push up down logs sops-edit sops-decrypt sops-encrypt sops-updatekeys
@@ -15,7 +16,7 @@ lint: ## Run linter
 	uv run ruff check src/ tests/
 
 build: ## Build OCI image with Podman
-	podman build --format oci -t $(IMAGE):$(TAG) .
+	podman build --format oci --build-arg UV_LINK_MODE=$(UV_LINK_MODE) -t $(IMAGE):$(TAG) .
 
 push: ## Push OCI image with Podman
 	podman push $(IMAGE):$(TAG)

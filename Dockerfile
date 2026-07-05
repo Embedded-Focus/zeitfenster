@@ -1,11 +1,17 @@
 FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim AS builder
 
+ARG UV_LINK_MODE=copy
+
 WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
-RUN uv sync --no-dev --no-install-project --frozen
+RUN --mount=type=cache,target=/root/.cache << EOT
+    uv sync --no-dev --no-install-project --frozen
+EOT
 
 COPY src/ src/
-RUN uv sync --no-dev --frozen
+RUN --mount=type=cache,target=/root/.cache << EOT
+    uv sync --no-dev --frozen
+EOT
 
 FROM python:3.14-slim-bookworm
 
