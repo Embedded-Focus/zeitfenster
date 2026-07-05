@@ -119,6 +119,24 @@ The public page title is configured separately from generated calendar event tex
 
 Owner notification emails use `email.from_name` as the display name for the SMTP sender, defaulting to `Zeitfenster <SMTP_USER>`.
 
+On startup, Zeitfenster generates a placeholder page and retries availability generation if calendar sources are not ready yet. Startup regeneration retries use exponential backoff and can be tuned with `ZEITFENSTER_STARTUP_REGEN_MAX_ATTEMPTS` and `ZEITFENSTER_STARTUP_REGEN_INITIAL_DELAY_SECONDS`.
+
+## Images
+
+The Makefile includes Podman targets for building and pushing an OCI image:
+
+```sh
+make build
+make push
+```
+
+The default image is `registry.example.com/zeitfenster/zeitfenster:1.0.0`. Override `IMAGE` or `TAG` when needed:
+
+```sh
+make build TAG=1.0.1
+make push IMAGE=registry.example.com/zeitfenster/zeitfenster TAG=1.0.1
+```
+
 ## Development
 
 ```sh

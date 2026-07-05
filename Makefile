@@ -1,7 +1,9 @@
 SERVICE_CREDS   ?= .env
+IMAGE           ?= registry.example.com/zeitfenster/zeitfenster
+TAG             ?= 1.0.0
 .DEFAULT_GOAL   := help
 
-.PHONY: help install test lint up down logs sops-edit sops-decrypt sops-encrypt sops-updatekeys
+.PHONY: help install test lint build push up down logs sops-edit sops-decrypt sops-encrypt sops-updatekeys
 
 install: ## Install dependencies
 	uv sync
@@ -11,6 +13,12 @@ test: ## Run tests
 
 lint: ## Run linter
 	uv run ruff check src/ tests/
+
+build: ## Build OCI image with Podman
+	podman build --format oci -t $(IMAGE):$(TAG) .
+
+push: ## Push OCI image with Podman
+	podman push $(IMAGE):$(TAG)
 
 up: ## Start demo environment
 	docker compose up --build -d
