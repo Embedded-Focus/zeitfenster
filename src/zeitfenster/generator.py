@@ -58,6 +58,7 @@ def generate_site(
     slots_by_duration: dict[str, list[FreeSlot]],
     config: AppConfig,
     output_dir: str | Path,
+    custom_static_dir: str | Path | None = None,
 ) -> None:
     output_dir = Path(output_dir)
     env = _build_template_env()
@@ -80,6 +81,7 @@ def generate_site(
 
         static_dest = tmp_dir / "static"
         shutil.copytree(_STATIC_DIR, static_dest)
+        _copy_custom_static(custom_static_dir, static_dest / "custom")
 
         _atomic_swap(tmp_dir, output_dir)
         logger.info("site_generated", output_dir=str(output_dir))
@@ -88,7 +90,11 @@ def generate_site(
         raise
 
 
-def generate_placeholder(config: AppConfig, output_dir: str | Path) -> None:
+def generate_placeholder(
+    config: AppConfig,
+    output_dir: str | Path,
+    custom_static_dir: str | Path | None = None,
+) -> None:
     output_dir = Path(output_dir)
     env = _build_template_env()
 
@@ -99,12 +105,34 @@ def generate_placeholder(config: AppConfig, output_dir: str | Path) -> None:
 
         static_dest = tmp_dir / "static"
         shutil.copytree(_STATIC_DIR, static_dest)
+        _copy_custom_static(custom_static_dir, static_dest / "custom")
 
         _atomic_swap(tmp_dir, output_dir)
         logger.info("placeholder_generated", output_dir=str(output_dir))
     except Exception:
         shutil.rmtree(tmp_dir, ignore_errors=True)
         raise
+
+
+def _copy_custom_static(
+    custom_static_dir: str | Path | None,
+    dest: Path,
+) -> None:
+    if custom_static_dir is None:
+        return
+
+    src = Path(custom_static_dir)
+    if not src.exists():
+        logger.info("custom_static_dir_missing", path=str(src))
+        return
+    if not src.is_dir():
+        raise ValueError(f"custom static path is not a directory: {src}")
+
+    for item in src.rglob("*"):
+        if item.is_symlink():
+            raise ValueError(f"custom static directory contains symlink: {item}")
+
+    shutil.copytree(src, dest)
 
 
 def _atomic_swap(src: Path, dest: Path) -> None:

@@ -1,6 +1,8 @@
 branding:
   title: "Book a Meeting"
-  logo: "/static/logo.svg"
+  # Use /static/custom/logo.svg for deployment-provided assets mounted via
+  # ZEITFENSTER_CUSTOM_STATIC_DIR, or /static/logo.svg for the bundled example.
+  logo: "/static/custom/logo.svg"
   colors:
     background: "#ffffff"
     text: "#373c44"

@@ -25,6 +25,7 @@ CONFIG_PATH = Path(
     os.environ.get("ZEITFENSTER_CONFIG_PATH", "/etc/zeitfenster/config.yaml")
 )
 SITE_DIR = Path(os.environ.get("ZEITFENSTER_SITE_DIR", "/site"))
+CUSTOM_STATIC_DIR = os.environ.get("ZEITFENSTER_CUSTOM_STATIC_DIR")
 BOOKING_RATE_LIMIT_MAX = int(os.environ.get("ZEITFENSTER_BOOKING_RATE_LIMIT_MAX", "5"))
 BOOKING_RATE_LIMIT_WINDOW_SECONDS = int(
     os.environ.get("ZEITFENSTER_BOOKING_RATE_LIMIT_WINDOW_SECONDS", "300")
@@ -46,9 +47,10 @@ async def _regenerate(app_instance: FastAPI) -> bool:
     try:
         config: AppConfig = app_instance.state.config
         site_dir: Path = app_instance.state.site_dir
+        custom_static_dir: Path | None = app_instance.state.custom_static_dir
         slots = fetch_and_compute(config)
         app_instance.state.current_slots = slots
-        generate_site(slots, config, site_dir)
+        generate_site(slots, config, site_dir, custom_static_dir)
         return True
     except Exception:
         logger.exception("regeneration_failed")
@@ -72,10 +74,16 @@ async def _periodic_regeneration(app_instance: FastAPI) -> None:
 async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     config_path = getattr(app.state, "config_path", CONFIG_PATH)
     site_dir = getattr(app.state, "site_dir", SITE_DIR)
+    custom_static_dir = getattr(
+        app.state,
+        "custom_static_dir",
+        Path(CUSTOM_STATIC_DIR) if CUSTOM_STATIC_DIR else None,
+    )
 
     config = AppConfig.from_yaml(config_path)
     app.state.config = config
     app.state.site_dir = site_dir
+    app.state.custom_static_dir = custom_static_dir
     app.state.refresh_interval_seconds = _refresh_interval_seconds(config)
     logger.info(
         "refresh_interval_configured",
@@ -92,7 +100,7 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     app.state.booking_rate_limit_timestamps = deque()
     app.state.regeneration_task = None
 
-    generate_placeholder(config, site_dir)
+    generate_placeholder(config, site_dir, custom_static_dir)
 
     for attempt in range(STARTUP_REGEN_MAX_ATTEMPTS):
         if await _regenerate(app):

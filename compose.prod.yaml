@@ -13,6 +13,9 @@ services:
     volumes:
       - site-data:/site
       - /etc/zeitfenster/config.yaml:/etc/zeitfenster/config.yaml:ro
+      - /etc/zeitfenster/static:/etc/zeitfenster/static:ro
+    environment:
+      ZEITFENSTER_CUSTOM_STATIC_DIR: /etc/zeitfenster/static
     env_file:
       - .env
     depends_on: !reset []

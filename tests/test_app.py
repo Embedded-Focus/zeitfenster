@@ -316,6 +316,39 @@ class TestStartupRegeneration:
 
         assert regenerate.await_count == 2
 
+    def test_lifespan_passes_custom_static_dir_to_generation(
+        self,
+        tmp_path,
+        monkeypatch,
+    ):
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text(CONFIG_YAML)
+        site_dir = tmp_path / "site"
+        site_dir.mkdir()
+        custom_static_dir = tmp_path / "custom-static"
+        custom_static_dir.mkdir()
+
+        monkeypatch.setenv("TEST_SMTP_HOST", "localhost")
+        monkeypatch.setenv("TEST_SMTP_USER", "testuser")
+        monkeypatch.setenv("TEST_SMTP_PASSWORD", "testpass")
+
+        app.state.config_path = config_path
+        app.state.site_dir = site_dir
+        app.state.custom_static_dir = custom_static_dir
+
+        with (
+            patch("zeitfenster.app.fetch_and_compute", return_value={"60m": []}),
+            patch("zeitfenster.app.generate_placeholder") as placeholder,
+            patch("zeitfenster.app.generate_site") as site,
+            TestClient(app),
+        ):
+            pass
+
+        placeholder.assert_called_once()
+        assert placeholder.call_args.args[2] == custom_static_dir
+        site.assert_called_once()
+        assert site.call_args.args[3] == custom_static_dir
+
 
 class TestHealthEndpoint:
     def test_health_returns_ok(self, client):

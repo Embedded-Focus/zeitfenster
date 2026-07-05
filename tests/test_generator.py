@@ -4,6 +4,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import pytest
+
 from zeitfenster.availability import FreeSlot
 from zeitfenster.config import AppConfig
 from zeitfenster.generator import generate_placeholder, generate_site
@@ -141,6 +143,47 @@ class TestGenerateSite:
             thankyou_html = thankyou.read_text()
             assert "Your meeting request has been received." in thankyou_html
             assert "not confirmed" in thankyou_html
+
+    def test_copies_custom_static_files(self):
+        config = _make_config()
+        slots = _make_fake_slots()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            custom_static = root / "custom-src"
+            custom_static.mkdir()
+            (custom_static / "logo.svg").write_text("<svg></svg>")
+            nested = custom_static / "images"
+            nested.mkdir()
+            (nested / "badge.txt").write_text("badge")
+
+            generate_site(slots, config, root / "site", custom_static)
+
+            static = root / "site" / "static"
+            assert (static / "custom" / "logo.svg").read_text() == "<svg></svg>"
+            assert (static / "custom" / "images" / "badge.txt").read_text() == "badge"
+
+    def test_missing_custom_static_directory_is_ignored(self):
+        config = _make_config()
+        slots = _make_fake_slots()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            generate_site(slots, config, root / "site", root / "missing")
+
+            assert (root / "site" / "static" / "booking.js").exists()
+            assert not (root / "site" / "static" / "custom").exists()
+
+    def test_custom_static_symlink_is_rejected(self):
+        config = _make_config()
+        slots = _make_fake_slots()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            custom_static = root / "custom-src"
+            custom_static.mkdir()
+            (custom_static / "target.txt").write_text("target")
+            (custom_static / "link.txt").symlink_to(custom_static / "target.txt")
+
+            with pytest.raises(ValueError, match="symlink"):
+                generate_site(slots, config, root / "site", custom_static)
 
     def test_generates_placeholder(self):
         config = _make_config()

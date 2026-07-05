@@ -161,6 +161,26 @@ branding:
 
 `primary*` values style buttons, links, focus rings, and active controls. `surface*` values style cards and day sections. `form*` values style text inputs. `slot_colors` and `slot_backgrounds` style duration tabs and slot buttons; if there are more durations than configured colors, the lists are reused cyclically.
 
+Deployment-owned static assets can be mounted with `ZEITFENSTER_CUSTOM_STATIC_DIR`. Zeitfenster copies that directory into `/site/static/custom` during site generation, so Caddy serves it with the rest of the generated static site. Symlinks in the custom static directory are rejected.
+
+Example production mount:
+
+```yaml
+services:
+  app:
+    volumes:
+      - /etc/zeitfenster/static:/etc/zeitfenster/static:ro
+    environment:
+      ZEITFENSTER_CUSTOM_STATIC_DIR: /etc/zeitfenster/static
+```
+
+With `/etc/zeitfenster/static/logo.svg` mounted, configure the logo as:
+
+```yaml
+branding:
+  logo: "/static/custom/logo.svg"
+```
+
 ## Images
 
 The Makefile includes Podman targets for building and pushing an OCI image:
