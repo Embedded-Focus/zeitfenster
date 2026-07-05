@@ -11,22 +11,36 @@
     <style>
         :root {
             --pico-primary: {{ branding.colors.primary }};
+            --pico-primary-background: {{ branding.colors.primary }};
+            --pico-primary-border: {{ branding.colors.primary }};
+            --pico-primary-hover: {{ branding.colors.primary_hover }};
+            --pico-primary-hover-background: {{ branding.colors.primary_hover }};
+            --pico-primary-hover-border: {{ branding.colors.primary_hover }};
+            --pico-primary-focus: {{ branding.colors.primary_focus }};
+            --pico-primary-inverse: {{ branding.colors.primary_inverse }};
+            --pico-background-color: {{ branding.colors.background }};
+            --pico-color: {{ branding.colors.text }};
+            --pico-muted-color: {{ branding.colors.muted_text }};
+            --pico-h1-color: {{ branding.colors.text }};
+            --pico-h2-color: {{ branding.colors.text }};
+            --pico-h3-color: {{ branding.colors.text }};
+            --pico-h4-color: {{ branding.colors.text }};
+            --pico-h5-color: {{ branding.colors.text }};
+            --pico-h6-color: {{ branding.colors.text }};
+            --pico-card-background-color: {{ branding.colors.surface }};
+            --pico-card-border-color: {{ branding.colors.surface_border }};
+            --pico-card-sectioning-background-color: {{ branding.colors.surface_section }};
+            --pico-muted-border-color: {{ branding.colors.surface_border }};
+            --pico-form-element-background-color: {{ branding.colors.form_background }};
+            --pico-form-element-border-color: {{ branding.colors.form_border }};
+            --pico-form-element-active-background-color: {{ branding.colors.form_active_background }};
+            --pico-form-element-active-border-color: {{ branding.colors.primary }};
+            --pico-form-element-focus-color: {{ branding.colors.primary_focus }};
         }
     </style>
     {% endif %}
 </head>
 <body>
-    {% if branding.logo %}
-    <header class="container">
-        <nav>
-            <ul>
-                <li>
-                    <img src="{{ branding.logo }}" alt="{{ branding.title }}" class="logo">
-                </li>
-            </ul>
-        </nav>
-    </header>
-    {% endif %}
     <main class="container">
         {% block content %}{% endblock %}
     </main>

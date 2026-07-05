@@ -30,8 +30,28 @@ def _validate_template_fields(
 
 
 class BrandingColors(BaseModel):
-    primary: str = "#2563eb"
     background: str = "#ffffff"
+    text: str = "#373c44"
+    muted_text: str = "#646b79"
+    primary: str = "#2563eb"
+    primary_hover: str = "#1d4ed8"
+    primary_focus: str = "rgba(37, 99, 235, 0.25)"
+    primary_inverse: str = "#ffffff"
+    surface: str = "#ffffff"
+    surface_border: str = "#e7eaef"
+    surface_section: str = "#fbfbfc"
+    form_background: str = "#fbfbfc"
+    form_border: str = "#cfd5e2"
+    form_active_background: str = "#ffffff"
+    slot_colors: list[str] = ["#4a90d9", "#5ba870", "#d4833e"]
+    slot_backgrounds: list[str] = ["#dbeafe", "#d1fae5", "#ffedd5"]
+
+    @field_validator("slot_colors", "slot_backgrounds")
+    @classmethod
+    def _validate_color_list(cls, value: list[str]) -> list[str]:
+        if not value:
+            raise ValueError("color lists must contain at least one color")
+        return value
 
 
 class Branding(BaseModel):

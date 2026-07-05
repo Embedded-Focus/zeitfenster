@@ -1,9 +1,28 @@
 branding:
   title: "Book a Meeting"
-  logo: "/static/logo.png"
+  logo: "/static/logo.svg"
   colors:
-    primary: "#2563eb"
     background: "#ffffff"
+    text: "#373c44"
+    muted_text: "#646b79"
+    primary: "#2563eb"
+    primary_hover: "#1d4ed8"
+    primary_focus: "rgba(37, 99, 235, 0.25)"
+    primary_inverse: "#ffffff"
+    surface: "#ffffff"
+    surface_border: "#e7eaef"
+    surface_section: "#fbfbfc"
+    form_background: "#fbfbfc"
+    form_border: "#cfd5e2"
+    form_active_background: "#ffffff"
+    slot_colors:
+      - "#4a90d9"
+      - "#5ba870"
+      - "#d4833e"
+    slot_backgrounds:
+      - "#dbeafe"
+      - "#d1fae5"
+      - "#ffedd5"
 
 availability:
   calendars:

@@ -1,14 +1,19 @@
 {% extends "base.html.j2" %}
 
 {% block content %}
-<hgroup>
-    <h1>{{ branding.title }}</h1>
-    <p>Select a duration and pick a time that works for you.</p>
-</hgroup>
+<div class="brand-heading">
+    {% if branding.logo %}
+    <img src="{{ branding.logo }}" alt="" class="logo">
+    {% endif %}
+    <hgroup>
+        <h1>{{ branding.title }}</h1>
+        <p>Select a duration and pick a time that works for you.</p>
+    </hgroup>
+</div>
 
 {% if slots_by_duration %}
-{% set duration_colors = ["#4a90d9", "#5ba870", "#d4833e"] %}
-{% set duration_pastels = ["#dbeafe", "#d1fae5", "#ffedd5"] %}
+{% set duration_colors = branding.colors.slot_colors %}
+{% set duration_pastels = branding.colors.slot_backgrounds %}
 <div class="duration-tabs" role="group">
     {% for duration in slots_by_duration %}
     <button class="duration-tab{% if loop.first %} active{% endif %}"

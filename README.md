@@ -123,6 +123,44 @@ Owner notification emails use `email.from_name` as the display name for the SMTP
 
 On startup, Zeitfenster generates a placeholder page and retries availability generation if calendar sources are not ready yet. Startup regeneration retries use exponential backoff and can be tuned with `ZEITFENSTER_STARTUP_REGEN_MAX_ATTEMPTS` and `ZEITFENSTER_STARTUP_REGEN_INITIAL_DELAY_SECONDS`.
 
+## Branding And Colors
+
+Frontend colors are configured under `branding.colors`. Every setting has a safe default, so you can override only the values needed for your corporate identity.
+
+```yaml
+branding:
+  title: "Book a Meeting"
+  logo: "/static/logo.png"
+  colors:
+    background: "#ffffff"
+    text: "#373c44"
+    muted_text: "#646b79"
+
+    primary: "#2563eb"
+    primary_hover: "#1d4ed8"
+    primary_focus: "rgba(37, 99, 235, 0.25)"
+    primary_inverse: "#ffffff"
+
+    surface: "#ffffff"
+    surface_border: "#e7eaef"
+    surface_section: "#fbfbfc"
+
+    form_background: "#fbfbfc"
+    form_border: "#cfd5e2"
+    form_active_background: "#ffffff"
+
+    slot_colors:
+      - "#4a90d9"
+      - "#5ba870"
+      - "#d4833e"
+    slot_backgrounds:
+      - "#dbeafe"
+      - "#d1fae5"
+      - "#ffedd5"
+```
+
+`primary*` values style buttons, links, focus rings, and active controls. `surface*` values style cards and day sections. `form*` values style text inputs. `slot_colors` and `slot_backgrounds` style duration tabs and slot buttons; if there are more durations than configured colors, the lists are reused cyclically.
+
 ## Images
 
 The Makefile includes Podman targets for building and pushing an OCI image:

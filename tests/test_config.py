@@ -39,7 +39,11 @@ branding:
   logo: "/static/logo.png"
   colors:
     primary: "#ff0000"
+    primary_hover: "#cc0000"
     background: "#000000"
+    text: "#eeeeee"
+    slot_colors: ["#111111", "#222222"]
+    slot_backgrounds: ["#eeeeee", "#dddddd"]
 
 availability:
   calendars:
@@ -97,6 +101,14 @@ class TestMinimalConfig:
             assert cfg.email.owner == "test@example.com"
             assert cfg.branding.title == "Book a Meeting"
             assert cfg.branding.colors.primary == "#2563eb"
+            assert cfg.branding.colors.primary_hover == "#1d4ed8"
+            assert cfg.branding.colors.background == "#ffffff"
+            assert cfg.branding.colors.text == "#373c44"
+            assert cfg.branding.colors.slot_colors == [
+                "#4a90d9",
+                "#5ba870",
+                "#d4833e",
+            ]
             assert cfg.rules.timezone == "UTC"
             assert cfg.rules.slot_durations == ["30m"]
             assert cfg.rules.refresh_interval == "15m"
@@ -117,6 +129,11 @@ class TestFullConfig:
             assert cfg.branding.title == "Test Booking"
             assert cfg.branding.logo == "/static/logo.png"
             assert cfg.branding.colors.primary == "#ff0000"
+            assert cfg.branding.colors.primary_hover == "#cc0000"
+            assert cfg.branding.colors.background == "#000000"
+            assert cfg.branding.colors.text == "#eeeeee"
+            assert cfg.branding.colors.slot_colors == ["#111111", "#222222"]
+            assert cfg.branding.colors.slot_backgrounds == ["#eeeeee", "#dddddd"]
             assert len(cfg.availability.calendars) == 2
             assert (
                 cfg.availability.calendars[0].url == "https://caldav.example.com/cal1/"
@@ -157,6 +174,22 @@ email:
         )
         try:
             with pytest.raises(ValueError, match="calendar_name"):
+                AppConfig.from_yaml(path)
+        finally:
+            path.unlink()
+
+    def test_rejects_empty_slot_color_lists(self):
+        path = _write_yaml(
+            """\
+branding:
+  colors:
+    slot_colors: []
+email:
+  owner: owner@example.com
+"""
+        )
+        try:
+            with pytest.raises(ValueError, match="at least one color"):
                 AppConfig.from_yaml(path)
         finally:
             path.unlink()

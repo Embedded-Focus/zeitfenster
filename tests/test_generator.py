@@ -18,7 +18,24 @@ def _make_config() -> AppConfig:
         {
             "branding": {
                 "title": "Book a Meeting with Rainer",
-                "colors": {"primary": "#0d6efd", "background": "#ffffff"},
+                "logo": "/static/logo.svg",
+                "colors": {
+                    "background": "#101820",
+                    "text": "#f5f7fa",
+                    "muted_text": "#b9c0ca",
+                    "primary": "#0d6efd",
+                    "primary_hover": "#0b5ed7",
+                    "primary_focus": "rgba(13, 110, 253, 0.25)",
+                    "primary_inverse": "#ffffff",
+                    "surface": "#182430",
+                    "surface_border": "#2d3b48",
+                    "surface_section": "#1d2a38",
+                    "form_background": "#111b25",
+                    "form_border": "#405060",
+                    "form_active_background": "#172230",
+                    "slot_colors": ["#ff0000", "#00aa00"],
+                    "slot_backgrounds": ["#ffeeee", "#eeffee"],
+                },
             },
             "email": {"owner": "test@example.com"},
             "rules": {
@@ -93,9 +110,12 @@ class TestGenerateSite:
             assert (static / "pico.min.css").exists()
             assert (static / "style.css").exists()
             assert (static / "booking.js").exists()
+            assert (static / "logo.svg").exists()
 
             html = index.read_text()
             assert "Book a Meeting with Rainer" in html
+            assert 'class="brand-heading"' in html
+            assert '<img src="/static/logo.svg"' in html
             assert "30m" in html
             assert "60m" in html
             assert "90m" in html
@@ -107,6 +127,15 @@ class TestGenerateSite:
             assert 'maxlength="100"' in html
             assert 'maxlength="254"' in html
             assert 'pattern="[^@\\s]+@[^@\\s]+\\.[^@\\s]+"' in html
+            assert "--pico-background-color: #101820" in html
+            assert "--pico-color: #f5f7fa" in html
+            assert "--pico-primary-hover: #0b5ed7" in html
+            assert "--pico-card-background-color: #182430" in html
+            assert "--pico-form-element-border-color: #405060" in html
+            assert "--duration-color: #ff0000" in html
+            assert "--duration-color: #00aa00" in html
+            assert "--duration-pastel: #ffeeee" in html
+            assert "--duration-pastel: #eeffee" in html
             assert "Request this slot" in html
             assert "Send Request" in html
             thankyou_html = thankyou.read_text()
@@ -123,6 +152,7 @@ class TestGenerateSite:
             assert "Generating availability" in html
             assert "Book a Meeting with Rainer" in html
             assert (Path(tmp) / "static" / "booking.js").exists()
+            assert (Path(tmp) / "static" / "logo.svg").exists()
 
     def test_booking_script_handles_submit_errors(self):
         config = _make_config()
