@@ -29,6 +29,12 @@ BOOKING_RATE_LIMIT_MAX = int(os.environ.get("ZEITFENSTER_BOOKING_RATE_LIMIT_MAX"
 BOOKING_RATE_LIMIT_WINDOW_SECONDS = int(
     os.environ.get("ZEITFENSTER_BOOKING_RATE_LIMIT_WINDOW_SECONDS", "300")
 )
+STARTUP_REGEN_MAX_ATTEMPTS = int(
+    os.environ.get("ZEITFENSTER_STARTUP_REGEN_MAX_ATTEMPTS", "10")
+)
+STARTUP_REGEN_INITIAL_DELAY_SECONDS = float(
+    os.environ.get("ZEITFENSTER_STARTUP_REGEN_INITIAL_DELAY_SECONDS", "1")
+)
 MAX_NAME_LENGTH = 100
 MAX_EMAIL_LENGTH = 254
 MAX_DATETIME_LENGTH = 64
@@ -36,15 +42,17 @@ MAX_DURATION_LENGTH = 16
 MAX_HONEYPOT_LENGTH = 2048
 
 
-async def _regenerate(app_instance: FastAPI) -> None:
+async def _regenerate(app_instance: FastAPI) -> bool:
     try:
         config: AppConfig = app_instance.state.config
         site_dir: Path = app_instance.state.site_dir
         slots = fetch_and_compute(config)
         app_instance.state.current_slots = slots
         generate_site(slots, config, site_dir)
+        return True
     except Exception:
         logger.exception("regeneration_failed")
+        return False
 
 
 def _refresh_interval_seconds(config: AppConfig) -> float:
@@ -86,13 +94,16 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
 
     generate_placeholder(config, site_dir)
 
-    for attempt in range(5):
-        await _regenerate(app)
-        if (site_dir / "thankyou.html").exists():
+    for attempt in range(STARTUP_REGEN_MAX_ATTEMPTS):
+        if await _regenerate(app):
             break
-        delay = 2**attempt
+        delay = STARTUP_REGEN_INITIAL_DELAY_SECONDS * (2**attempt)
+        if attempt + 1 >= STARTUP_REGEN_MAX_ATTEMPTS:
+            continue
         logger.info("startup_regen_retry", attempt=attempt + 1, delay=delay)
         await asyncio.sleep(delay)
+    else:
+        logger.warning("startup_regen_retries_exhausted")
 
     task = asyncio.create_task(_periodic_regeneration(app))
     try:

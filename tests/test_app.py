@@ -286,6 +286,37 @@ class TestRefreshInterval:
                 pass
 
 
+class TestStartupRegeneration:
+    def test_lifespan_retries_failed_startup_regeneration(
+        self,
+        tmp_path,
+        monkeypatch,
+    ):
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text(CONFIG_YAML)
+        site_dir = tmp_path / "site"
+        site_dir.mkdir()
+
+        monkeypatch.setenv("TEST_SMTP_HOST", "localhost")
+        monkeypatch.setenv("TEST_SMTP_USER", "testuser")
+        monkeypatch.setenv("TEST_SMTP_PASSWORD", "testpass")
+        monkeypatch.setattr(app_module, "STARTUP_REGEN_MAX_ATTEMPTS", 2)
+        monkeypatch.setattr(app_module, "STARTUP_REGEN_INITIAL_DELAY_SECONDS", 0)
+
+        app.state.config_path = config_path
+        app.state.site_dir = site_dir
+        regenerate = AsyncMock(side_effect=[False, True])
+
+        with (
+            patch("zeitfenster.app._regenerate", new=regenerate),
+            patch("zeitfenster.app.generate_placeholder"),
+            TestClient(app),
+        ):
+            pass
+
+        assert regenerate.await_count == 2
+
+
 class TestHealthEndpoint:
     def test_health_returns_ok(self, client):
         response = client.get("/health")
