@@ -117,6 +117,7 @@ class TestGenerateSite:
             html = index.read_text()
             assert "Book a Meeting with Rainer" in html
             assert 'class="brand-heading"' in html
+            assert 'class="brand-copy"' in html
             assert '<img src="/static/logo.svg"' in html
             assert "30m" in html
             assert "60m" in html
