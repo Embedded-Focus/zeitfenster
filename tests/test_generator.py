@@ -13,6 +13,7 @@ from zeitfenster.generator import generate_placeholder, generate_site
 TZ = ZoneInfo("Europe/Vienna")
 
 OUTPUT_DIR = Path(__file__).parent / "output"
+ROOT_DIR = Path(__file__).parents[1]
 
 
 def _make_config() -> AppConfig:
@@ -113,9 +114,15 @@ class TestGenerateSite:
             assert (static / "style.css").exists()
             assert (static / "booking.js").exists()
             assert (static / "logo.svg").exists()
+            assert (static / "logo.svg").read_text() == (
+                ROOT_DIR / "logo.svg"
+            ).read_text()
 
             html = index.read_text()
             assert "Book a Meeting with Rainer" in html
+            assert (
+                '<link rel="icon" href="/static/logo.svg" type="image/svg+xml">' in html
+            )
             assert 'class="brand-heading"' in html
             assert 'class="brand-copy"' in html
             assert '<img src="/static/logo.svg"' in html
@@ -163,6 +170,35 @@ class TestGenerateSite:
             assert (static / "custom" / "logo.svg").read_text() == "<svg></svg>"
             assert (static / "custom" / "images" / "badge.txt").read_text() == "badge"
 
+    def test_uses_configured_logo_as_favicon(self):
+        config = _make_config()
+        config.branding.logo = "/static/custom/logo.svg"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            custom_static = root / "custom-src"
+            custom_static.mkdir()
+            (custom_static / "logo.svg").write_text("<svg></svg>")
+
+            generate_site(_make_fake_slots(), config, root / "site", custom_static)
+
+            html = (root / "site" / "index.html").read_text()
+            assert (
+                '<link rel="icon" href="/static/custom/logo.svg" type="image/svg+xml">'
+            ) in html
+            assert '<img src="/static/custom/logo.svg"' in html
+
+    def test_favicon_falls_back_to_bundled_logo(self):
+        config = _make_config()
+        config.branding.logo = None
+        with tempfile.TemporaryDirectory() as tmp:
+            generate_site(_make_fake_slots(), config, tmp)
+
+            html = (Path(tmp) / "index.html").read_text()
+            assert (
+                '<link rel="icon" href="static/logo.svg" type="image/svg+xml">' in html
+            )
+            assert "<img src=" not in html
+
     def test_missing_custom_static_directory_is_ignored(self):
         config = _make_config()
         slots = _make_fake_slots()
@@ -195,6 +231,9 @@ class TestGenerateSite:
             html = index.read_text()
             assert "Generating availability" in html
             assert "Book a Meeting with Rainer" in html
+            assert (
+                '<link rel="icon" href="/static/logo.svg" type="image/svg+xml">' in html
+            )
             assert (Path(tmp) / "static" / "booking.js").exists()
             assert (Path(tmp) / "static" / "logo.svg").exists()
 

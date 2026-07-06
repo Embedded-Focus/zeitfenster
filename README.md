@@ -127,10 +127,12 @@ On startup, Zeitfenster generates a placeholder page and retries availability ge
 
 Frontend colors are configured under `branding.colors`. Every setting has a safe default, so you can override only the values needed for your corporate identity.
 
+`branding.logo` is used for both the page logo and the favicon. Only SVG logos are supported.
+
 ```yaml
 branding:
   title: "Book a Meeting"
-  logo: "/static/logo.png"
+  logo: "/static/logo.svg"
   colors:
     background: "#ffffff"
     text: "#373c44"
@@ -174,7 +176,7 @@ services:
       ZEITFENSTER_CUSTOM_STATIC_DIR: /etc/zeitfenster/static
 ```
 
-With `/etc/zeitfenster/static/logo.svg` mounted, configure the logo as:
+With `/etc/zeitfenster/static/logo.svg` mounted, configure the SVG logo and favicon as:
 
 ```yaml
 branding:

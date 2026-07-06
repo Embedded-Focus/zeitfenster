@@ -36,7 +36,7 @@ email:
 FULL_YAML = """\
 branding:
   title: "Test Booking"
-  logo: "/static/logo.png"
+  logo: "/static/logo.svg"
   colors:
     primary: "#ff0000"
     primary_hover: "#cc0000"
@@ -127,7 +127,7 @@ class TestFullConfig:
         try:
             cfg = AppConfig.from_yaml(path)
             assert cfg.branding.title == "Test Booking"
-            assert cfg.branding.logo == "/static/logo.png"
+            assert cfg.branding.logo == "/static/logo.svg"
             assert cfg.branding.colors.primary == "#ff0000"
             assert cfg.branding.colors.primary_hover == "#cc0000"
             assert cfg.branding.colors.background == "#000000"
