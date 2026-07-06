@@ -135,6 +135,44 @@ class TestBuildBookingIcs:
         )
         assert owner_attendee.params["CN"] == "Jane Doe"
 
+    def test_organizer_uses_configured_owner_name(self):
+        data = build_booking_ics(
+            owner_email="owner@example.com",
+            owner_name="Jane Doe",
+            customer_name="Alice",
+            customer_email="alice@example.com",
+            start=datetime(2026, 7, 6, 10, 0, tzinfo=TZ),
+            end=datetime(2026, 7, 6, 11, 0, tzinfo=TZ),
+        )
+        cal = Calendar.from_ical(data)
+        event = [c for c in cal.walk() if c.name == "VEVENT"][0]
+
+        assert event["organizer"].params["CN"] == "Jane Doe"
+
+    def test_rfc_style_owner_mailbox_is_normalized(self):
+        data = build_booking_ics(
+            owner_email="Jane Doe <jane.doe@example.com>",
+            customer_name="Alice",
+            customer_email="alice@example.com",
+            start=datetime(2026, 7, 6, 10, 0, tzinfo=TZ),
+            end=datetime(2026, 7, 6, 11, 0, tzinfo=TZ),
+        )
+        cal = Calendar.from_ical(data)
+        event = [c for c in cal.walk() if c.name == "VEVENT"][0]
+
+        organizer = event["organizer"]
+        assert str(organizer) == "mailto:jane.doe@example.com"
+        assert organizer.params["CN"] == "Jane Doe"
+
+        owner_attendee = next(
+            attendee
+            for attendee in event["attendee"]
+            if "jane.doe@example.com" in str(attendee)
+        )
+        assert str(owner_attendee) == "mailto:jane.doe@example.com"
+        assert owner_attendee.params["CN"] == "Jane Doe"
+        assert "Jane Doe <jane.doe@example.com>" not in data.decode()
+
     def test_summary_defaults_to_customer_name(self):
         data = build_booking_ics(
             owner_email="owner@example.com",

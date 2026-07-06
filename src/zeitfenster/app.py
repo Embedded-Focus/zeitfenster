@@ -16,7 +16,7 @@ from zeitfenster.availability import FreeSlot, fetch_and_compute
 from zeitfenster.config import AppConfig
 from zeitfenster.email import send_booking_email
 from zeitfenster.generator import generate_placeholder, generate_site
-from zeitfenster.ics import build_booking_ics
+from zeitfenster.ics import build_booking_ics, normalize_mailbox
 from zeitfenster.parsing import parse_duration
 
 logger = structlog.get_logger()
@@ -341,9 +341,12 @@ async def book(
 
     slot_summary = f"{start.strftime('%A, %B %-d %Y %H:%M')} – {end.strftime('%H:%M')}"
 
+    owner_email, parsed_owner_name = normalize_mailbox(config.email.owner_list[0])
+    owner_name = config.booking.owner_name or parsed_owner_name
+
     ics_data = build_booking_ics(
-        owner_email=config.email.owner_list[0],
-        owner_name=config.booking.owner_name,
+        owner_email=owner_email,
+        owner_name=owner_name,
         customer_name=name,
         customer_email=email,
         start=start,

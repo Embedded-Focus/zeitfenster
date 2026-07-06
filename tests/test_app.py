@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi.testclient import TestClient
+from icalendar import Calendar
 
 import zeitfenster.app as app_module
 from zeitfenster.app import app
@@ -415,6 +416,30 @@ class TestBookEndpoint:
         call_kwargs = mock_send.call_args
         assert call_kwargs[1]["customer_name"] == "Alice"
         assert call_kwargs[1]["customer_email"] == "alice@example.com"
+
+    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    def test_rfc_style_owner_mailbox_is_normalized_for_booking_ics(
+        self, mock_send, client
+    ):
+        self._set_available_slot(client)
+        client.app.state.config.email.owner = ["Jane Doe <jane.doe@example.com>"]
+        client.app.state.config.booking.owner_name = "Jane Doe"
+
+        with patch("zeitfenster.app._regenerate", new_callable=AsyncMock):
+            response = client.post(
+                "/book",
+                data=self._valid_booking_data(),
+            )
+
+        assert response.status_code == 200
+        ics_data = mock_send.call_args.kwargs["ics_data"]
+        cal = Calendar.from_ical(ics_data)
+        event = [c for c in cal.walk() if c.name == "VEVENT"][0]
+        organizer = event["organizer"]
+
+        assert str(organizer) == "mailto:jane.doe@example.com"
+        assert organizer.params["CN"] == "Jane Doe"
+        assert "Jane Doe <jane.doe@example.com>" not in ics_data.decode()
 
     @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
     def test_honeypot_blocks_spam(self, mock_send, client):

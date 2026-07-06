@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from email.utils import parseaddr
 
 from icalendar import Calendar, Event, vCalAddress, vText
 
@@ -19,6 +20,13 @@ def _add_attendee(
     event.add("attendee", attendee, encode=False)
 
 
+def normalize_mailbox(value: str) -> tuple[str, str | None]:
+    parsed_name, parsed_email = parseaddr(value)
+    email = parsed_email or value.strip()
+    name = parsed_name or None
+    return email, name
+
+
 def build_booking_ics(
     owner_email: str,
     customer_name: str,
@@ -30,6 +38,9 @@ def build_booking_ics(
     location: str | None = None,
     description_template: str = "",
 ) -> bytes:
+    owner_email, parsed_owner_name = normalize_mailbox(owner_email)
+    owner_display_name = owner_name or parsed_owner_name or owner_email
+
     cal = Calendar()
     cal.add("prodid", "-//Zeitfenster//Booking//EN")
     cal.add("version", "2.0")
@@ -59,13 +70,13 @@ def build_booking_ics(
         event.add("location", location)
 
     organizer = vCalAddress(f"mailto:{owner_email}")
-    organizer.params["cn"] = vText(owner_email)
+    organizer.params["cn"] = vText(owner_display_name)
     event.add("organizer", organizer)
 
     _add_attendee(
         event,
         email=owner_email,
-        name=owner_name or owner_email,
+        name=owner_display_name,
         role="CHAIR",
         partstat="ACCEPTED",
     )
