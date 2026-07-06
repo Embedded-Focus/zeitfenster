@@ -1,8 +1,8 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime, tzinfo
 from email.utils import parseaddr
 
-from icalendar import Calendar, Event, vCalAddress, vText
+from icalendar import Calendar, Event, Timezone, vCalAddress, vText
 
 
 def _add_attendee(
@@ -27,6 +27,39 @@ def normalize_mailbox(value: str) -> tuple[str, str | None]:
     return email, name
 
 
+def _timezone_cache_key(value: tzinfo) -> str:
+    return getattr(value, "key", None) or getattr(value, "zone", None) or str(value)
+
+
+def _uses_utc_suffix(value: datetime) -> bool:
+    if value.tzinfo is None:
+        return False
+    offset = value.utcoffset()
+    return offset is not None and offset.total_seconds() == 0
+
+
+def _add_event_timezones(cal: Calendar, start: datetime, end: datetime) -> None:
+    first_date = date(min(start.year, end.year), 1, 1)
+    last_date = date(max(start.year, end.year) + 1, 1, 1)
+    seen: set[str] = set()
+
+    for value in (start, end):
+        if value.tzinfo is None or value.utcoffset() is None or _uses_utc_suffix(value):
+            continue
+
+        cache_key = _timezone_cache_key(value.tzinfo)
+        if cache_key in seen:
+            continue
+
+        timezone = Timezone.from_tzinfo(
+            value.tzinfo,
+            first_date=first_date,
+            last_date=last_date,
+        )
+        seen.add(cache_key)
+        cal.add_component(timezone)
+
+
 def build_booking_ics(
     owner_email: str,
     customer_name: str,
@@ -45,6 +78,7 @@ def build_booking_ics(
     cal.add("prodid", "-//Zeitfenster//Booking//EN")
     cal.add("version", "2.0")
     cal.add("method", "PUBLISH")
+    _add_event_timezones(cal, start, end)
 
     event = Event()
     event.add("uid", str(uuid.uuid4()))

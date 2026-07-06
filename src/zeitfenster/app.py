@@ -280,7 +280,7 @@ def _validate_requested_slot(
     duration: str,
     start: datetime,
     end: datetime,
-) -> None:
+) -> FreeSlot:
     if end <= start:
         raise HTTPException(status_code=400, detail="slot_end must be after slot_start")
 
@@ -297,8 +297,11 @@ def _validate_requested_slot(
         request.app.state, "current_slots", {}
     )
     matching_slots = current_slots.get(duration, [])
-    if not any(slot.start == start and slot.end == end for slot in matching_slots):
-        raise HTTPException(status_code=400, detail="Requested slot is not available")
+    for slot in matching_slots:
+        if slot.start == start and slot.end == end:
+            return slot
+
+    raise HTTPException(status_code=400, detail="Requested slot is not available")
 
 
 @app.post("/book", response_class=HTMLResponse)
@@ -330,7 +333,7 @@ async def book(
 
     start = _parse_booking_datetime(slot_start, "slot_start")
     end = _parse_booking_datetime(slot_end, "slot_end")
-    _validate_requested_slot(
+    requested_slot = _validate_requested_slot(
         request=request,
         config=config,
         duration=duration,
@@ -349,8 +352,8 @@ async def book(
         owner_name=owner_name,
         customer_name=name,
         customer_email=email,
-        start=start,
-        end=end,
+        start=requested_slot.start,
+        end=requested_slot.end,
         summary_template=config.booking.summary_template,
         location=config.booking.location,
         description_template=config.booking.description_template,

@@ -440,6 +440,9 @@ class TestBookEndpoint:
         assert str(organizer) == "mailto:jane.doe@example.com"
         assert organizer.params["CN"] == "Jane Doe"
         assert "Jane Doe <jane.doe@example.com>" not in ics_data.decode()
+        assert "TZID:Europe/Vienna" in ics_data.decode()
+        assert event["dtstart"].params["TZID"] == "Europe/Vienna"
+        assert event["dtend"].params["TZID"] == "Europe/Vienna"
 
     @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
     def test_honeypot_blocks_spam(self, mock_send, client):

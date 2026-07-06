@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 from icalendar import Calendar
@@ -38,6 +38,38 @@ class TestBuildBookingIcs:
         event = events[0]
         assert event["dtstart"].dt == start
         assert event["dtend"].dt == end
+
+    def test_includes_vtimezone_for_local_timezone(self):
+        data = build_booking_ics(
+            owner_email="owner@example.com",
+            customer_name="Alice",
+            customer_email="alice@example.com",
+            start=datetime(2026, 7, 6, 10, 30, tzinfo=TZ),
+            end=datetime(2026, 7, 6, 11, 0, tzinfo=TZ),
+        )
+        text = data.decode()
+        cal = Calendar.from_ical(data)
+        timezones = [c for c in cal.walk() if c.name == "VTIMEZONE"]
+        event = [c for c in cal.walk() if c.name == "VEVENT"][0]
+
+        assert len(timezones) == 1
+        assert str(timezones[0]["tzid"]) == "Europe/Vienna"
+        assert event["dtstart"].params["TZID"] == "Europe/Vienna"
+        assert event["dtend"].params["TZID"] == "Europe/Vienna"
+        assert "BEGIN:VTIMEZONE" in text
+        assert "DTSTART;TZID=Europe/Vienna:20260706T103000" in text
+        assert "DTEND;TZID=Europe/Vienna:20260706T110000" in text
+
+    def test_utc_times_do_not_include_vtimezone(self):
+        data = build_booking_ics(
+            owner_email="owner@example.com",
+            customer_name="Alice",
+            customer_email="alice@example.com",
+            start=datetime(2026, 7, 6, 10, 30, tzinfo=timezone.utc),
+            end=datetime(2026, 7, 6, 11, 0, tzinfo=timezone.utc),
+        )
+
+        assert "BEGIN:VTIMEZONE" not in data.decode()
 
     def test_organizer_owner_attendee_and_customer_attendee(self):
         data = build_booking_ics(
