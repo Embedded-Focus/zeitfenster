@@ -8,8 +8,8 @@ The application never writes to any calendar. You stay in control of every meeti
 
 ## How It Works
 
-1. A background task periodically reads your calendars — CalDAV, ICS feeds, or both (read-only). The default refresh interval is 15 minutes and can be changed with `rules.refresh_interval`.
-2. Free slots are computed based on your working hours, buffer, and other rules.
+1. A background task periodically reads CalDAV calendars, ICS feeds, and free slots from other Zeitfenster instances (see [Federation](#federation)).
+2. Free slots are computed based on your working hours, buffer, federation members, and other rules.
 3. A static HTML page is generated and served by Caddy.
 4. When a customer requests a slot, a small FastAPI endpoint sends you an email with an `.ics` attachment.
 5. You import the `.ics` draft, add final meeting details or meeting links, and send the actual invitation from your calendar client.
