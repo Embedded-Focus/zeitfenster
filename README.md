@@ -4,6 +4,8 @@ Minimal, self-hosted appointment request service. Reads existing calendars (CalD
 
 The application never writes to any calendar. You stay in control of every meeting request.
 
+![Zeitfenster booking page screenshot](screenshot.png)
+
 ## How It Works
 
 1. A background task periodically reads your calendars — CalDAV, ICS feeds, or both (read-only). The default refresh interval is 15 minutes and can be changed with `rules.refresh_interval`.
