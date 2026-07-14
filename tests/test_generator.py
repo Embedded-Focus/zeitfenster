@@ -113,6 +113,8 @@ class TestGenerateSite:
             assert (static / "pico.min.css").exists()
             assert (static / "style.css").exists()
             assert (static / "booking.js").exists()
+            assert (static / "embed.js").exists()
+            assert (static / "embed-runtime.js").exists()
             assert (static / "logo.svg").exists()
             assert (static / "logo.svg").read_text() == (
                 ROOT_DIR / "logo.svg"
@@ -132,6 +134,7 @@ class TestGenerateSite:
             assert "09:00" in html
             assert "Monday" in html
             assert 'src="static/booking.js"' in html
+            assert 'src="static/embed-runtime.js"' in html
             assert "<script>" not in html
             assert "onclick=" not in html
             assert 'maxlength="100"' in html
@@ -247,6 +250,18 @@ class TestGenerateSite:
             assert "fetch(form.action" in script
             assert "setCustomValidity" in script
             assert "reportValidity" in script
+
+    def test_embed_runtime_script_applies_overrides_and_reports_resize(self):
+        config = _make_config()
+        slots = _make_fake_slots()
+        with tempfile.TemporaryDirectory() as tmp:
+            generate_site(slots, config, tmp)
+            script = (Path(tmp) / "static" / "embed-runtime.js").read_text()
+            assert "--pico-primary" in script
+            assert "ResizeObserver" in script
+            assert "zeitfenster:resize" in script
+            assert "postMessage" in script
+            assert 'protocol !== "https:"' in script
 
     def test_empty_slots(self):
         config = _make_config()

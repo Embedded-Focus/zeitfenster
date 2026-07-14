@@ -6,6 +6,8 @@ services:
     volumes:
       - site-data:/site:ro
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    environment:
+      ZEITFENSTER_ALLOWED_EMBED_ORIGINS: "${ZEITFENSTER_ALLOWED_EMBED_ORIGINS:-'none'}"
     depends_on:
       - app
     networks:

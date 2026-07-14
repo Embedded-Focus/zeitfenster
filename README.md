@@ -46,6 +46,7 @@ Zeitfenster is designed around a small public surface and a secret-free frontend
 - **User-facing validation errors:** booking form submissions are intercepted by the static JavaScript. Backend validation failures are mapped back to native browser validation messages instead of exposing raw JSON error responses to normal users.
 - **Fail-before-side-effects:** invalid, forged, stale, malformed, or timezone-naive meeting requests are rejected before `.ics` generation, SMTP delivery, or availability regeneration.
 - **Federation privacy boundary:** `/api/free-slots` exposes computed free slots only. Federation members do not receive raw busy intervals or calendar event details.
+- **Embedding is opt-in:** `frame-ancestors 'none'` blocks framing by default. Operators explicitly allowlist embedding origins via `ZEITFENSTER_ALLOWED_EMBED_ORIGINS`. Allowing an origin to frame the page only lets that origin control the iframe's container — it does not expose booking data beyond what the public page already shows, and `/book`'s slot revalidation is unchanged.
 
 ## Quick Start (Demo)
 
@@ -184,6 +185,41 @@ With `/etc/zeitfenster/static/logo.svg` mounted, configure the SVG logo and favi
 branding:
   logo: "/static/custom/logo.svg"
 ```
+
+## Embedding
+
+The booking page can be embedded in a pre-existing web page via an iframe and a small loader script, similar to Calendly-style embeds. No new public API is exposed — the embedded page is the same static site Caddy already serves, and `POST /book` keeps validating requests against currently advertised slots exactly as it does for direct visitors.
+
+Embedding is disabled by default (`frame-ancestors 'none'`). To allow it, set `ZEITFENSTER_ALLOWED_EMBED_ORIGINS` on the Caddy container to a space-separated list of origins allowed to frame the page:
+
+```yaml
+services:
+  caddy:
+    environment:
+      ZEITFENSTER_ALLOWED_EMBED_ORIGINS: "https://hostsite.com https://other.example"
+```
+
+Host pages then include:
+
+```html
+<div id="zeitfenster-booking"></div>
+<script src="https://booking.example.com/static/embed.js"
+        data-src="https://booking.example.com"
+        data-target="#zeitfenster-booking"
+        data-primary="#ff6600"
+        data-logo="https://hostsite.com/logo.svg"
+        data-title="Book a call with Acme"
+        data-default-height="700"
+        data-min-height="300"
+        data-max-height="2000"
+        defer></script>
+```
+
+- `data-src` (required) — the Zeitfenster instance's public URL.
+- `data-target` (optional) — a CSS selector for where to insert the iframe; defaults to right after the script tag.
+- `data-primary`, `data-logo`, `data-title` (optional) — per-embed overrides for the accent color, logo, and heading/title, layered on top of the instance's own `branding` config. `data-primary` must be a hex color; `data-logo` must be an `https:` URL. Invalid values are ignored, falling back to the instance's configured branding.
+- The iframe auto-resizes to fit its content via `postMessage`, so no fixed height is required on the host page. `data-default-height` sets the initial height before the first resize message arrives; `data-min-height`/`data-max-height` bound how far it can auto-resize. All three default to 600/200/5000px and are ignored if not positive integers or if `data-min-height` exceeds `data-max-height`.
+- If the host page has its own Content-Security-Policy, it needs `script-src` and `frame-src`/`child-src` to permit the Zeitfenster origin.
 
 ## Images
 

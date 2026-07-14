@@ -1,7 +1,7 @@
 :80 {
 	root * /site
 	header {
-		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors {$ZEITFENSTER_ALLOWED_EMBED_ORIGINS:'none'}"
 		Referrer-Policy "same-origin"
 		X-Content-Type-Options "nosniff"
 	}
