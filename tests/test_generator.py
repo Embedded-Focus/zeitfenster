@@ -1,3 +1,4 @@
+import re
 import shutil
 import tempfile
 from datetime import datetime, timedelta
@@ -14,6 +15,10 @@ TZ = ZoneInfo("Europe/Vienna")
 
 OUTPUT_DIR = Path(__file__).parent / "output"
 ROOT_DIR = Path(__file__).parents[1]
+
+
+def _inline_script_tags(html: str) -> list[str]:
+    return re.findall(r"<script(?![^>]*\bsrc=)[^>]*>", html, flags=re.IGNORECASE)
 
 
 def _make_config() -> AppConfig:
@@ -135,6 +140,7 @@ class TestGenerateSite:
             assert "Monday" in html
             assert 'src="static/booking.js"' in html
             assert 'src="static/embed-runtime.js"' in html
+            assert _inline_script_tags(html) == []
             assert "<script>" not in html
             assert "onclick=" not in html
             assert 'maxlength="100"' in html
@@ -250,6 +256,36 @@ class TestGenerateSite:
             assert "fetch(form.action" in script
             assert "setCustomValidity" in script
             assert "reportValidity" in script
+
+    def test_generates_cap_public_config_without_secret(self):
+        config = _make_config()
+        config.captcha.enabled = True
+        config.captcha.api_endpoint = "https://cap.example.com/site-key/"
+        config.captcha.widget_script_url = "https://cap.example.com/assets/widget.js"
+        config.captcha.wasm_url = "https://cap.example.com/assets/cap_wasm_bg.wasm"
+        config.captcha.secret_env = "CAP_SECRET"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            generate_site(_make_fake_slots(), config, tmp)
+
+            html = (Path(tmp) / "index.html").read_text()
+            assert 'data-cap-api-endpoint="https://cap.example.com/site-key/"' in html
+            assert (
+                'data-cap-widget-script-url="https://cap.example.com/assets/widget.js"'
+                in html
+            )
+            assert (
+                'data-cap-wasm-url="https://cap.example.com/assets/cap_wasm_bg.wasm"'
+                in html
+            )
+            assert _inline_script_tags(html) == []
+            assert "CAP_CUSTOM_WASM_URL" not in html
+            assert "CAP_SECRET" not in html
+
+            script = (Path(tmp) / "static" / "booking.js").read_text()
+            assert "cap-token" in script
+            assert "new Cap" in script
+            assert "CAP_CUSTOM_WASM_URL" in script
 
     def test_embed_runtime_script_applies_overrides_and_reports_resize(self):
         config = _make_config()

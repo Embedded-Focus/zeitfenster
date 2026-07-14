@@ -46,6 +46,7 @@ Zeitfenster is designed around a small public surface and a secret-free frontend
 - **Bounded booking input:** booking form fields are normalized and size-limited before use. Names reject control characters, and customer email addresses are checked for a valid basic shape with a dotted domain. The generated form mirrors key limits with native browser validation.
 - **Booking slot validation:** `POST /book` does not trust submitted hidden form fields by themselves. The backend parses timezone-aware datetimes, requires `slot_end > slot_start`, checks that the posted duration is configured and matches the submitted range, and requires `(duration, slot_start, slot_end)` to exactly match a currently advertised slot in memory.
 - **Request abuse controls:** accepted meeting requests pass through an in-memory global rate limit before email delivery. Request-triggered availability regeneration is coalesced so repeated posts cannot create unlimited concurrent calendar refresh tasks. Caddy also caps `/book` request bodies.
+- **Optional Cap CAPTCHA:** `POST /book` can require a token from a self-hosted Cap instance. The browser loads Cap's widget from the Cap server and solves the challenge before submitting the form; the internal Python app verifies the token with Cap's `/siteverify` endpoint before slot validation, rate limiting, `.ics` generation, SMTP, or regeneration. Cap reduces automated abuse, but the current-slot validation remains the booking authority.
 - **Browser hardening:** booking-page JavaScript is served as a static asset, with no inline event handlers. Caddy sends a Content Security Policy, `X-Content-Type-Options: nosniff`, and `Referrer-Policy`.
 - **User-facing validation errors:** booking form submissions are intercepted by the static JavaScript. Backend validation failures are mapped back to native browser validation messages instead of exposing raw JSON error responses to normal users.
 - **Fail-before-side-effects:** invalid, forged, stale, malformed, or timezone-naive meeting requests are rejected before `.ics` generation, SMTP delivery, or availability regeneration.
@@ -133,6 +134,78 @@ Owner notification emails use `email.from_name` as the display name for the SMTP
 On startup, Zeitfenster generates a placeholder page and retries availability generation if calendar sources are not ready yet. Startup regeneration retries use exponential backoff and can be tuned with `ZEITFENSTER_STARTUP_REGEN_MAX_ATTEMPTS` and `ZEITFENSTER_STARTUP_REGEN_INITIAL_DELAY_SECONDS`.
 
 `availability.ics_urls` entries must use `https://` — configs with a plain `http://` feed URL fail to load with a validation error. If you're upgrading from an earlier version, update any `http://` ICS URLs before deploying.
+
+### Cap CAPTCHA
+
+[Cap](https://trycap.dev/) integration is optional and disabled by default. It
+is designed for a self-hosted Cap Standalone instance with clear separation
+between public browser configuration and private verification secrets.
+
+Request flow when enabled:
+
+1. The static booking page exposes only the public Cap API endpoint, widget script URL, and WASM URL.
+2. When the customer clicks `Send Request`, `static/booking.js` sets Cap's custom WASM URL, loads the widget from the Cap instance, and calls `cap.solve()`.
+3. The browser submits the booking form with the returned `cap-token`.
+4. The internal Python app verifies that token against Cap's `/siteverify` endpoint using the secret from `secret_env`.
+5. Only a valid Cap token proceeds to the normal slot validation and booking email path.
+
+Configure Zeitfenster:
+
+```yaml
+captcha:
+  enabled: true
+  provider: cap
+  api_endpoint: https://cap.example.com/<site-key>/
+  widget_script_url: https://cap.example.com/assets/widget.js
+  wasm_url: https://cap.example.com/assets/cap_wasm_bg.wasm
+  secret_env: CAP_SECRET
+```
+
+Set `CAP_SECRET` only on the Python app container. Do not put the Cap secret in
+the YAML file, Caddy container, or generated static files.
+
+The Cap instance must serve its own widget assets. For Cap Standalone, enable the
+asset server and pin versions in the Cap deployment:
+
+```env
+ENABLE_ASSETS_SERVER=true
+WIDGET_VERSION=<pinned-cap-widget-version>
+WASM_VERSION=<pinned-cap-wasm-version>
+CACHE_HOST=https://cdn.jsdelivr.net
+```
+
+Verify the asset server before enabling CAPTCHA on Zeitfenster:
+
+```sh
+curl -i https://cap.example.com/assets/widget.js
+curl -i https://cap.example.com/assets/cap_wasm.js
+curl -i https://cap.example.com/assets/cap_wasm_bg.wasm
+```
+
+Those requests should return JavaScript/WASM assets, not `Asset not cached yet`.
+Zeitfenster sets `window.CAP_CUSTOM_WASM_URL` from `captcha.wasm_url` before
+solving, so browsers should not fetch Cap WASM from jsDelivr or any other CDN.
+
+Because Caddy ships with a restrictive Content-Security-Policy, allow the Cap
+origin explicitly on the Caddy container:
+
+```yaml
+services:
+  caddy:
+    environment:
+      ZEITFENSTER_CAP_SCRIPT_SRC: "https://cap.example.com"
+      ZEITFENSTER_CAP_WASM_EVAL_SRC: "'wasm-unsafe-eval'"
+      ZEITFENSTER_CAP_CONNECT_SRC: "https://cap.example.com"
+      ZEITFENSTER_CAP_WORKER_SRC: "https://cap.example.com"
+```
+
+Firefox requires `'wasm-unsafe-eval'` in `script-src` for Cap's WASM solver.
+Zeitfenster keeps that token separate from the Cap script origin so operators can
+leave it unset when CAPTCHA is disabled. Do not use broad `'unsafe-inline'` for
+Cap setup; Zeitfenster sets Cap globals from bundled JavaScript instead.
+
+If `captcha.enabled` is true and Cap is unreachable, Zeitfenster fails closed:
+booking submissions return an error before email delivery or regeneration.
 
 ## Branding And Colors
 
@@ -228,6 +301,7 @@ Host pages then include:
 - `data-primary`, `data-logo`, `data-title` (optional) — per-embed overrides for the accent color, logo, and heading/title, layered on top of the instance's own `branding` config. `data-primary` must be a hex color; `data-logo` must be an `https:` URL. Invalid values are ignored, falling back to the instance's configured branding.
 - The iframe auto-resizes to fit its content via `postMessage`, so no fixed height is required on the host page. `data-default-height` sets the initial height before the first resize message arrives; `data-min-height`/`data-max-height` bound how far it can auto-resize. All three default to 600/200/5000px and are ignored if not positive integers or if `data-min-height` exceeds `data-max-height`.
 - If the host page has its own Content-Security-Policy, it needs `script-src` and `frame-src`/`child-src` to permit the Zeitfenster origin.
+- If Cap CAPTCHA is enabled, the host page's CSP may also need to allow the Cap origin for the framed page's script/connect/worker activity, depending on the browser and policy inheritance in the embedding setup.
 
 ## Images
 

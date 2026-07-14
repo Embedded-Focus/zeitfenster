@@ -1,4 +1,6 @@
 (function () {
+    var capConstructorPromise = null;
+
     function showDuration(duration) {
         document.querySelectorAll(".slot-list").forEach(function (el) {
             el.hidden = true;
@@ -104,6 +106,101 @@
             });
     }
 
+    function capConfig() {
+        var root = document.querySelector("[data-cap-api-endpoint]");
+        if (!root) {
+            return null;
+        }
+        return {
+            apiEndpoint: root.dataset.capApiEndpoint,
+            widgetScriptUrl: root.dataset.capWidgetScriptUrl,
+            wasmUrl: root.dataset.capWasmUrl
+        };
+    }
+
+    function loadScript(src) {
+        return new Promise(function (resolve, reject) {
+            var existing = null;
+            Array.prototype.forEach.call(document.scripts, function (script) {
+                if (script.getAttribute("src") === src) {
+                    existing = script;
+                }
+            });
+            if (existing) {
+                if (existing.dataset.loaded === "true") {
+                    resolve();
+                    return;
+                }
+                existing.addEventListener("load", resolve, { once: true });
+                existing.addEventListener("error", reject, { once: true });
+                return;
+            }
+
+            var script = document.createElement("script");
+            script.src = src;
+            script.async = true;
+            script.addEventListener(
+                "load",
+                function () {
+                    script.dataset.loaded = "true";
+                    resolve();
+                },
+                { once: true }
+            );
+            script.addEventListener("error", reject, { once: true });
+            document.head.appendChild(script);
+        });
+    }
+
+    function loadCapConstructor(scriptUrl) {
+        if (window.Cap) {
+            return Promise.resolve(window.Cap);
+        }
+        if (!capConstructorPromise) {
+            capConstructorPromise = import(scriptUrl)
+                .then(function (module) {
+                    return module.default || module.Cap || window.Cap;
+                })
+                .catch(function () {
+                    return loadScript(scriptUrl).then(function () {
+                        return window.Cap;
+                    });
+                })
+                .then(function (Cap) {
+                    if (!Cap) {
+                        throw new Error("CAPTCHA could not be loaded.");
+                    }
+                    return Cap;
+                });
+        }
+        return capConstructorPromise;
+    }
+
+    function solveCaptchaIfConfigured(formData) {
+        var config = capConfig();
+        if (!config) {
+            return Promise.resolve(formData);
+        }
+        if (!config.apiEndpoint || !config.widgetScriptUrl || !config.wasmUrl) {
+            return Promise.reject(new Error("CAPTCHA is not configured."));
+        }
+        window.CAP_CUSTOM_WASM_URL = config.wasmUrl;
+        return loadCapConstructor(config.widgetScriptUrl)
+            .then(function (Cap) {
+                var cap = new Cap({
+                    apiEndpoint: config.apiEndpoint
+                });
+                return cap.solve();
+            })
+            .then(function (solution) {
+                if (!solution || !solution.token) {
+                    throw new Error("CAPTCHA verification failed.");
+                }
+                formData.set("cap-token", solution.token);
+                return formData;
+            });
+    }
+
     function submitBooking(form) {
         var submitButton = form.querySelector('.booking-form button[type="submit"]');
         clearCustomValidity(form);
@@ -117,13 +214,16 @@
             submitButton.setAttribute("aria-busy", "true");
         }
 
-        fetch(form.action, {
-            method: "POST",
-            body: new FormData(form),
-            headers: {
-                Accept: "text/html, application/json"
-            }
-        })
+        solveCaptchaIfConfigured(new FormData(form))
+            .then(function (formData) {
+                return fetch(form.action, {
+                    method: "POST",
+                    body: formData,
+                    headers: {
+                        Accept: "text/html, application/json"
+                    }
+                });
+            })
             .then(function (response) {
                 if (!response.ok) {
                     return readErrorMessage(response).then(function (message) {

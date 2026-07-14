@@ -43,7 +43,12 @@
     {% endif %}
 </head>
 <body>
-    <main class="container">
+    <main class="container"
+          {% if captcha and captcha.enabled %}
+          data-cap-api-endpoint="{{ captcha.api_endpoint }}"
+          data-cap-widget-script-url="{{ captcha.widget_script_url }}"
+          data-cap-wasm-url="{{ captcha.wasm_url }}"
+          {% endif %}>
         {% block content %}{% endblock %}
     </main>
     <footer class="container">

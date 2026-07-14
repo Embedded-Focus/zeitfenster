@@ -66,6 +66,7 @@ def generate_site(
     template_data = _prepare_slots_for_template(slots_by_duration)
     context = {
         "branding": config.branding,
+        "captcha": config.captcha,
         "slots_by_duration": template_data,
     }
 
@@ -101,7 +102,9 @@ def generate_placeholder(
     tmp_dir = Path(tempfile.mkdtemp(prefix="zeitfenster_"))
     try:
         template = env.get_template("placeholder.html.j2")
-        (tmp_dir / "index.html").write_text(template.render(branding=config.branding))
+        (tmp_dir / "index.html").write_text(
+            template.render(branding=config.branding, captcha=config.captcha)
+        )
 
         static_dest = tmp_dir / "static"
         shutil.copytree(_STATIC_DIR, static_dest)

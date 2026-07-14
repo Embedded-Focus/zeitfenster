@@ -1,5 +1,6 @@
 import asyncio
 import hmac
+import json
 import os
 from collections import deque
 from contextlib import asynccontextmanager
@@ -8,6 +9,7 @@ from email.utils import parseaddr
 from pathlib import Path
 from time import monotonic
 
+import httpx2
 import structlog
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse
@@ -41,6 +43,8 @@ MAX_EMAIL_LENGTH = 254
 MAX_DATETIME_LENGTH = 64
 MAX_DURATION_LENGTH = 16
 MAX_HONEYPOT_LENGTH = 2048
+MAX_CAP_TOKEN_LENGTH = 4096
+CAPTCHA_VERIFY_TIMEOUT_SECONDS = 5.0
 
 
 async def _regenerate(app_instance: FastAPI) -> bool:
@@ -314,6 +318,37 @@ def _validate_requested_slot(
     raise HTTPException(status_code=400, detail="Requested slot is not available")
 
 
+async def _verify_captcha_token(config: AppConfig, token: str) -> None:
+    if not config.captcha.enabled:
+        return
+
+    token = _validate_bounded_field(token, "cap-token", MAX_CAP_TOKEN_LENGTH)
+    if not token:
+        raise HTTPException(status_code=400, detail="CAPTCHA token is required")
+
+    try:
+        response = await asyncio.to_thread(
+            httpx2.post,
+            config.captcha.siteverify_url,
+            json={"secret": config.captcha.secret, "response": token},
+            timeout=CAPTCHA_VERIFY_TIMEOUT_SECONDS,
+            follow_redirects=False,
+        )
+        response.raise_for_status()
+        data = json.loads(response.content)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("captcha_verification_unavailable")
+        raise HTTPException(
+            status_code=503,
+            detail="CAPTCHA verification is unavailable",
+        ) from exc
+
+    if data.get("success") is not True:
+        raise HTTPException(status_code=400, detail="CAPTCHA verification failed")
+
+
 @app.post("/book", response_class=HTMLResponse)
 async def book(
     request: Request,
@@ -323,6 +358,7 @@ async def book(
     slot_end: str = Form(),
     duration: str = Form(),
     website: str = Form(default=""),
+    cap_token: str = Form(default="", alias="cap-token"),
 ) -> HTMLResponse:
     config: AppConfig = request.app.state.config
     site_dir: Path = request.app.state.site_dir
@@ -340,6 +376,8 @@ async def book(
     if website:
         logger.info("honeypot_triggered")
         return HTMLResponse(_read_thankyou(site_dir))
+
+    await _verify_captcha_token(config, cap_token)
 
     start = _parse_booking_datetime(slot_start, "slot_start")
     end = _parse_booking_datetime(slot_end, "slot_end")

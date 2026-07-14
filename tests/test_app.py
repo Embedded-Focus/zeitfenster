@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, patch
 from zoneinfo import ZoneInfo
 
 import pytest
+import httpx2
 from fastapi.testclient import TestClient
 from icalendar import Calendar
 
@@ -451,6 +452,27 @@ class TestBookEndpoint:
         data.update(overrides)
         return data
 
+    def _enable_captcha(self, client, monkeypatch):
+        monkeypatch.setenv("CAP_SECRET", "cap-secret")
+        client.app.state.config.captcha.enabled = True
+        client.app.state.config.captcha.api_endpoint = (
+            "https://cap.example.com/site-key/"
+        )
+        client.app.state.config.captcha.widget_script_url = (
+            "https://cap.example.com/assets/widget.js"
+        )
+        client.app.state.config.captcha.wasm_url = (
+            "https://cap.example.com/assets/cap_wasm_bg.wasm"
+        )
+        client.app.state.config.captcha.secret_env = "CAP_SECRET"
+
+    def _cap_response(self, success: bool, url: str = "https://cap.example.com"):
+        return httpx2.Response(
+            200,
+            content=(b'{"success": true}' if success else b'{"success": false}'),
+            request=httpx2.Request("POST", url),
+        )
+
     def _set_available_slot(self, client):
         client.app.state.current_slots = {
             "60m": [
@@ -559,6 +581,114 @@ class TestBookEndpoint:
         assert "Thank you" in response.text
         mock_send.assert_not_called()
         mock_regen.assert_not_called()
+
+    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    def test_honeypot_does_not_verify_captcha(self, mock_send, client, monkeypatch):
+        self._enable_captcha(client, monkeypatch)
+        with (
+            patch("zeitfenster.app.httpx2.post") as mock_post,
+            patch("zeitfenster.app._regenerate", new_callable=AsyncMock) as mock_regen,
+        ):
+            response = client.post(
+                "/book",
+                data=self._valid_booking_data(website="http://spam.example.com"),
+            )
+        assert response.status_code == 200
+        assert "Thank you" in response.text
+        mock_post.assert_not_called()
+        mock_send.assert_not_called()
+        mock_regen.assert_not_called()
+
+    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    def test_rejects_missing_captcha_token_when_enabled(
+        self, mock_send, client, monkeypatch
+    ):
+        self._enable_captcha(client, monkeypatch)
+        self._set_available_slot(client)
+        with (
+            patch("zeitfenster.app.httpx2.post") as mock_post,
+            patch("zeitfenster.app._regenerate", new_callable=AsyncMock) as mock_regen,
+        ):
+            response = client.post("/book", data=self._valid_booking_data())
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == "CAPTCHA token is required"
+        mock_post.assert_not_called()
+        mock_send.assert_not_called()
+        mock_regen.assert_not_called()
+
+    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    def test_rejects_failed_captcha_before_email_and_regeneration(
+        self, mock_send, client, monkeypatch
+    ):
+        self._enable_captcha(client, monkeypatch)
+        self._set_available_slot(client)
+        with (
+            patch(
+                "zeitfenster.app.httpx2.post",
+                return_value=self._cap_response(False),
+            ) as mock_post,
+            patch("zeitfenster.app._regenerate", new_callable=AsyncMock) as mock_regen,
+        ):
+            response = client.post(
+                "/book",
+                data=self._valid_booking_data(**{"cap-token": "bad-token"}),
+            )
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == "CAPTCHA verification failed"
+        mock_post.assert_called_once_with(
+            "https://cap.example.com/site-key/siteverify",
+            json={"secret": "cap-secret", "response": "bad-token"},
+            timeout=app_module.CAPTCHA_VERIFY_TIMEOUT_SECONDS,
+            follow_redirects=False,
+        )
+        mock_send.assert_not_called()
+        mock_regen.assert_not_called()
+
+    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    def test_captcha_verification_unavailable_fails_closed(
+        self, mock_send, client, monkeypatch
+    ):
+        self._enable_captcha(client, monkeypatch)
+        self._set_available_slot(client)
+        with (
+            patch(
+                "zeitfenster.app.httpx2.post",
+                side_effect=httpx2.ConnectError("offline"),
+            ),
+            patch("zeitfenster.app._regenerate", new_callable=AsyncMock) as mock_regen,
+        ):
+            response = client.post(
+                "/book",
+                data=self._valid_booking_data(**{"cap-token": "token"}),
+            )
+
+        assert response.status_code == 503
+        assert response.json()["detail"] == "CAPTCHA verification is unavailable"
+        mock_send.assert_not_called()
+        mock_regen.assert_not_called()
+
+    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    def test_successful_booking_with_captcha(self, mock_send, client, monkeypatch):
+        self._enable_captcha(client, monkeypatch)
+        self._set_available_slot(client)
+        with (
+            patch(
+                "zeitfenster.app.httpx2.post",
+                return_value=self._cap_response(True),
+            ) as mock_post,
+            patch("zeitfenster.app._regenerate", new_callable=AsyncMock),
+        ):
+            response = client.post(
+                "/book",
+                data=self._valid_booking_data(**{"cap-token": "good-token"}),
+            )
+
+        assert response.status_code == 200
+        assert "Thank you" in response.text
+        mock_post.assert_called_once()
+        mock_send.assert_called_once()
 
     @pytest.mark.parametrize(
         ("field", "value", "detail"),

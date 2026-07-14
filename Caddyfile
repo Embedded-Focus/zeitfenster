@@ -1,7 +1,7 @@
 :80 {
 	root * /site
 	header {
-		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors {$ZEITFENSTER_ALLOWED_EMBED_ORIGINS:'none'}"
+		Content-Security-Policy "default-src 'self'; script-src 'self' {$ZEITFENSTER_CAP_SCRIPT_SRC:} {$ZEITFENSTER_CAP_WASM_EVAL_SRC:}; connect-src 'self' {$ZEITFENSTER_CAP_CONNECT_SRC:}; worker-src 'self' blob: {$ZEITFENSTER_CAP_WORKER_SRC:}; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors {$ZEITFENSTER_ALLOWED_EMBED_ORIGINS:'none'}"
 		Referrer-Policy "same-origin"
 		X-Content-Type-Options "nosniff"
 	}

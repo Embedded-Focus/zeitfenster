@@ -34,6 +34,19 @@ email:
   owner: test@example.com
 """
 
+CAPTCHA_YAML = """\
+captcha:
+  enabled: true
+  provider: cap
+  api_endpoint: https://cap.example.com/site-key/
+  widget_script_url: https://cap.example.com/assets/widget.js
+  wasm_url: https://cap.example.com/assets/cap_wasm_bg.wasm
+  secret_env: CAP_SECRET
+
+email:
+  owner: test@example.com
+"""
+
 FULL_YAML = """\
 branding:
   title: "Test Booking"
@@ -325,6 +338,114 @@ class TestZeitfensterSource:
             os.environ.pop("INBOUND_ZEITFENSTER_TOKEN", None)
             with pytest.raises(ValueError, match="INBOUND_ZEITFENSTER_TOKEN"):
                 _ = cfg.federation.free_slots_token
+        finally:
+            path.unlink()
+
+
+class TestCaptcha:
+    def test_default_disabled(self):
+        path = _write_yaml(MINIMAL_YAML)
+        try:
+            cfg = AppConfig.from_yaml(path)
+            assert cfg.captcha.enabled is False
+            assert cfg.captcha.api_endpoint is None
+            assert cfg.captcha.widget_script_url is None
+            assert cfg.captcha.wasm_url is None
+            assert cfg.captcha.secret_env is None
+        finally:
+            path.unlink()
+
+    def test_loads_cap_config(self):
+        path = _write_yaml(CAPTCHA_YAML)
+        try:
+            cfg = AppConfig.from_yaml(path)
+            assert cfg.captcha.enabled is True
+            assert cfg.captcha.provider == "cap"
+            assert cfg.captcha.api_endpoint == "https://cap.example.com/site-key/"
+            assert cfg.captcha.widget_script_url == (
+                "https://cap.example.com/assets/widget.js"
+            )
+            assert cfg.captcha.wasm_url == (
+                "https://cap.example.com/assets/cap_wasm_bg.wasm"
+            )
+            assert cfg.captcha.secret_env == "CAP_SECRET"
+            assert cfg.captcha.siteverify_url == (
+                "https://cap.example.com/site-key/siteverify"
+            )
+        finally:
+            path.unlink()
+
+    def test_secret_from_env(self, monkeypatch):
+        path = _write_yaml(CAPTCHA_YAML)
+        monkeypatch.setenv("CAP_SECRET", "cap-secret")
+        try:
+            cfg = AppConfig.from_yaml(path)
+            assert cfg.captcha.secret == "cap-secret"
+        finally:
+            path.unlink()
+
+    def test_missing_secret_env_raises(self):
+        path = _write_yaml(CAPTCHA_YAML)
+        try:
+            cfg = AppConfig.from_yaml(path)
+            os.environ.pop("CAP_SECRET", None)
+            with pytest.raises(ValueError, match="CAP_SECRET"):
+                _ = cfg.captcha.secret
+        finally:
+            path.unlink()
+
+    def test_enabled_requires_cap_fields(self):
+        path = _write_yaml(
+            """\
+captcha:
+  enabled: true
+email:
+  owner: test@example.com
+"""
+        )
+        try:
+            with pytest.raises(ValueError, match="api_endpoint"):
+                AppConfig.from_yaml(path)
+        finally:
+            path.unlink()
+
+    def test_rejects_non_http_cap_urls(self):
+        path = _write_yaml(
+            """\
+captcha:
+  enabled: true
+  provider: cap
+  api_endpoint: javascript:alert(1)
+  widget_script_url: https://cap.example.com/assets/widget.js
+  wasm_url: https://cap.example.com/assets/cap_wasm_bg.wasm
+  secret_env: CAP_SECRET
+email:
+  owner: test@example.com
+"""
+        )
+        try:
+            with pytest.raises(ValueError, match="captcha.api_endpoint"):
+                AppConfig.from_yaml(path)
+        finally:
+            path.unlink()
+
+    def test_rejects_non_http_cap_wasm_url(self):
+        path = _write_yaml(
+            """\
+captcha:
+  enabled: true
+  provider: cap
+  api_endpoint: https://cap.example.com/site-key/
+  widget_script_url: https://cap.example.com/assets/widget.js
+  wasm_url: data:application/wasm;base64,AAAA
+  secret_env: CAP_SECRET
+email:
+  owner: test@example.com
+"""
+        )
+        try:
+            with pytest.raises(ValueError, match="captcha.wasm_url"):
+                AppConfig.from_yaml(path)
         finally:
             path.unlink()
 

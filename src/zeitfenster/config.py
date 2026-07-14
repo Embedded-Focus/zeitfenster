@@ -1,7 +1,8 @@
 import os
-from string import Formatter
 from pathlib import Path
+from string import Formatter
 from typing import Any
+from urllib.parse import urlsplit
 
 import yaml
 from pydantic import BaseModel, field_validator, model_validator
@@ -122,6 +123,65 @@ class Federation(BaseModel):
         return value
 
 
+class Captcha(BaseModel):
+    enabled: bool = False
+    provider: str = "cap"
+    api_endpoint: str | None = None
+    widget_script_url: str | None = None
+    wasm_url: str | None = None
+    secret_env: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_enabled_config(self) -> "Captcha":
+        if not self.enabled:
+            return self
+        if self.provider != "cap":
+            raise ValueError("captcha.provider must be 'cap'")
+        missing = [
+            name
+            for name, value in (
+                ("api_endpoint", self.api_endpoint),
+                ("widget_script_url", self.widget_script_url),
+                ("wasm_url", self.wasm_url),
+                ("secret_env", self.secret_env),
+            )
+            if not value
+        ]
+        if missing:
+            raise ValueError(
+                "captcha requires these fields when enabled: " + ", ".join(missing)
+            )
+        self._validate_http_url(self.api_endpoint, "captcha.api_endpoint")
+        self._validate_http_url(self.widget_script_url, "captcha.widget_script_url")
+        self._validate_http_url(self.wasm_url, "captcha.wasm_url")
+        return self
+
+    @staticmethod
+    def _validate_http_url(value: str | None, field_name: str) -> None:
+        if value is None:
+            return
+        parsed = urlsplit(value)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError(f"{field_name} must be an http or https URL")
+
+    @property
+    def secret(self) -> str:
+        if self.secret_env is None:
+            raise ValueError("captcha.secret_env is not configured")
+        value = os.environ.get(self.secret_env)
+        if not value:
+            raise ValueError(
+                f"Environment variable {self.secret_env!r} is not set or is empty"
+            )
+        return value
+
+    @property
+    def siteverify_url(self) -> str:
+        if self.api_endpoint is None:
+            raise ValueError("captcha.api_endpoint is not configured")
+        return f"{self.api_endpoint.rstrip('/')}/siteverify"
+
+
 class Booking(BaseModel):
     location: str | None = None
     owner_name: str | None = None
@@ -225,6 +285,7 @@ class AppConfig(BaseModel):
     branding: Branding = Branding()
     availability: Availability = Availability()
     federation: Federation = Federation()
+    captcha: Captcha = Captcha()
     booking: Booking = Booking()
     rules: Rules = Rules()
     email: Email

@@ -57,6 +57,22 @@ availability:
 # federation:
 #   free_slots_token_env: ZEITFENSTER_FREE_SLOTS_TOKEN
 
+# Optional CAPTCHA protection for POST /book using a self-hosted Cap instance.
+# Public values are embedded into the generated booking page. The secret remains
+# in the internal Python backend and is only read from the named environment var.
+# Also allow the Cap origin in Caddy's CSP, for example:
+# ZEITFENSTER_CAP_SCRIPT_SRC=https://cap.example.com
+# ZEITFENSTER_CAP_WASM_EVAL_SRC='wasm-unsafe-eval'
+# ZEITFENSTER_CAP_CONNECT_SRC=https://cap.example.com
+# ZEITFENSTER_CAP_WORKER_SRC=https://cap.example.com
+# captcha:
+#   enabled: true
+#   provider: cap
+#   api_endpoint: https://cap.example.com/site-key/
+#   widget_script_url: https://cap.example.com/assets/widget.js
+#   wasm_url: https://cap.example.com/assets/cap_wasm_bg.wasm
+#   secret_env: CAP_SECRET
+
 booking:
   # Optional location for the owner-side draft event. This can be a permanent
   # meeting room URL, a physical location, or omitted for manual editing.
