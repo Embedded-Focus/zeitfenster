@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 from datetime import date, datetime, time, tzinfo
+from typing import Any
+from urllib.parse import urljoin, urlsplit
 
 import caldav  # type: ignore[import-untyped]
 import structlog
@@ -8,6 +10,23 @@ from icalendar import cal as ical_cal
 from zeitfenster.config import CalendarSource
 
 logger = structlog.get_logger()
+
+
+def _validate_caldav_redirect(
+    original_host: str | None,
+    original_scheme: str,
+    response: Any,
+    **_kwargs: object,
+) -> None:
+    if not response.is_redirect:
+        return
+    target = urlsplit(urljoin(response.url, response.headers["location"]))
+    if target.hostname != original_host or target.scheme != original_scheme:
+        raise ValueError(
+            f"Refusing to follow CalDAV redirect from "
+            f"{original_scheme}://{original_host} to "
+            f"{target.scheme}://{target.hostname}"
+        )
 
 
 @dataclass(frozen=True, order=True)
@@ -65,10 +84,19 @@ def fetch_busy_intervals(
         range_start=range_start.isoformat(),
         range_end=range_end.isoformat(),
     )
+    parsed_source = urlsplit(source.url)
+    original_host = parsed_source.hostname
+    original_scheme = parsed_source.scheme
+
     client = caldav.DAVClient(
         url=source.url,
         username=source.username,
         password=source.password,
+    )
+    client.session.hooks["response"].append(
+        lambda response, **kwargs: _validate_caldav_redirect(
+            original_host, original_scheme, response, **kwargs
+        )
     )
     calendar = client.calendar(url=source.url)
     events = calendar.search(
