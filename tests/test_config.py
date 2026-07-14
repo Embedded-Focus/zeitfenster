@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from zeitfenster.config import AppConfig, IcsUrlSource
+from zeitfenster.config import AppConfig, Email, IcsUrlSource
 
 
 MINIMAL_YAML = """\
@@ -341,3 +341,21 @@ class TestIcsUrlSource:
     def test_rejects_non_http_scheme(self):
         with pytest.raises(ValidationError, match="https://"):
             IcsUrlSource(url="webcal://calendar.example.com/cal.ics")
+
+
+class TestEmailTlsOptions:
+    def test_defaults_to_start_tls_only(self):
+        email = Email(owner="owner@example.com")
+        assert email.smtp_start_tls is True
+        assert email.smtp_use_tls is False
+
+    def test_allows_implicit_tls_with_start_tls_disabled(self):
+        email = Email(
+            owner="owner@example.com", smtp_start_tls=False, smtp_use_tls=True
+        )
+        assert email.smtp_use_tls is True
+        assert email.smtp_start_tls is False
+
+    def test_rejects_use_tls_and_start_tls_together(self):
+        with pytest.raises(ValidationError, match="mutually exclusive"):
+            Email(owner="owner@example.com", smtp_start_tls=True, smtp_use_tls=True)

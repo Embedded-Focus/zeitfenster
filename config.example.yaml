@@ -100,3 +100,7 @@ email:
   # Independent of smtp_start_tls: set to false only for relays that
   # genuinely accept no authentication (e.g. a trusted local relay).
   smtp_use_auth: true
+  # Implicit TLS (SMTPS, typically port 465). Mutually exclusive with
+  # smtp_start_tls: set smtp_start_tls: false and smtp_port: 465 when
+  # enabling this.
+  smtp_use_tls: false

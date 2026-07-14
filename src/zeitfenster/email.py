@@ -55,6 +55,7 @@ async def send_booking_email(
         username=config.smtp_user if config.smtp_use_auth else None,
         password=config.smtp_password if config.smtp_use_auth else None,
         start_tls=config.smtp_start_tls,
+        use_tls=config.smtp_use_tls,
     )
 
     logger.info("booking_email_sent", to=config.owner_list)

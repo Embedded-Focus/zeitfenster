@@ -120,3 +120,48 @@ async def test_smtp_use_auth_false_disables_auth(monkeypatch):
 
     assert send.call_args.kwargs["username"] is None
     assert send.call_args.kwargs["password"] is None
+
+
+@pytest.mark.asyncio
+async def test_smtp_use_tls_passed_through(monkeypatch):
+    monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
+    monkeypatch.setenv("SMTP_USER", "sender@example.com")
+    monkeypatch.setenv("SMTP_PASSWORD", "secret")
+    config = Email(
+        owner="owner@example.com",
+        smtp_port=465,
+        smtp_start_tls=False,
+        smtp_use_tls=True,
+    )
+
+    with patch("zeitfenster.email.aiosmtplib.send", new_callable=AsyncMock) as send:
+        await send_booking_email(
+            config=config,
+            customer_name="Alice",
+            customer_email="alice@example.com",
+            slot_summary="Monday, July 6 2026 10:00 - 11:00",
+            ics_data=b"BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n",
+        )
+
+    assert send.call_args.kwargs["use_tls"] is True
+    assert send.call_args.kwargs["start_tls"] is False
+    assert send.call_args.kwargs["port"] == 465
+
+
+@pytest.mark.asyncio
+async def test_smtp_use_tls_defaults_to_false(monkeypatch):
+    monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
+    monkeypatch.setenv("SMTP_USER", "sender@example.com")
+    monkeypatch.setenv("SMTP_PASSWORD", "secret")
+    config = Email(owner="owner@example.com")
+
+    with patch("zeitfenster.email.aiosmtplib.send", new_callable=AsyncMock) as send:
+        await send_booking_email(
+            config=config,
+            customer_name="Alice",
+            customer_email="alice@example.com",
+            slot_summary="Monday, July 6 2026 10:00 - 11:00",
+            ics_data=b"BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n",
+        )
+
+    assert send.call_args.kwargs["use_tls"] is False

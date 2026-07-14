@@ -174,6 +174,16 @@ class Email(BaseModel):
     smtp_password_env: str = "SMTP_PASSWORD"
     smtp_start_tls: bool = True
     smtp_use_auth: bool = True
+    smtp_use_tls: bool = False
+
+    @model_validator(mode="after")
+    def _validate_tls_options(self) -> "Email":
+        if self.smtp_use_tls and self.smtp_start_tls:
+            raise ValueError(
+                "smtp_use_tls and smtp_start_tls are mutually exclusive; set "
+                "smtp_start_tls: false when using smtp_use_tls (implicit TLS)"
+            )
+        return self
 
     @property
     def owner_list(self) -> list[str]:
