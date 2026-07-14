@@ -192,3 +192,22 @@ async def test_refuses_to_send_auth_over_unencrypted_connection(monkeypatch):
             )
 
     send.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_certificate_validation_is_always_enabled(monkeypatch):
+    monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
+    monkeypatch.setenv("SMTP_USER", "sender@example.com")
+    monkeypatch.setenv("SMTP_PASSWORD", "secret")
+    config = Email(owner="owner@example.com")
+
+    with patch("zeitfenster.email.aiosmtplib.send", new_callable=AsyncMock) as send:
+        await send_booking_email(
+            config=config,
+            customer_name="Alice",
+            customer_email="alice@example.com",
+            slot_summary="Monday, July 6 2026 10:00 - 11:00",
+            ics_data=b"BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n",
+        )
+
+    assert send.call_args.kwargs["validate_certs"] is True

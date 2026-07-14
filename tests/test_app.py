@@ -100,6 +100,10 @@ START_TLS_DISABLED_CONFIG_YAML = (
     CONFIG_YAML + "  smtp_start_tls: false\n  smtp_use_auth: false\n"
 )
 
+SMTPS_CONFIG_YAML = CONFIG_YAML.replace("smtp_port: 587", "smtp_port: 465") + (
+    "  smtp_start_tls: false\n  smtp_use_tls: true\n"
+)
+
 
 @pytest.fixture()
 def test_env(tmp_path, monkeypatch):
@@ -247,7 +251,7 @@ class TestFreeSlotsEndpoint:
 
 
 class TestSmtpStartTlsLogging:
-    def test_warns_when_start_tls_disabled(self, tmp_path, monkeypatch):
+    def test_warns_when_encryption_disabled(self, tmp_path, monkeypatch):
         config_path = tmp_path / "config.yaml"
         config_path.write_text(START_TLS_DISABLED_CONFIG_YAML)
         site_dir = tmp_path / "site"
@@ -270,11 +274,12 @@ class TestSmtpStartTlsLogging:
             pass
 
         mock_warning.assert_any_call(
-            "smtp_start_tls_disabled",
+            "smtp_encryption_disabled",
             message=(
-                "SMTP STARTTLS is disabled; booking emails (customer name, "
-                "email, and slot time) will be sent in plaintext unless the "
-                "relay is otherwise secured."
+                "SMTP transport encryption is disabled; booking emails "
+                "(customer name, email, and slot time) will be sent in "
+                "plaintext. This is only allowed when SMTP authentication "
+                "is disabled."
             ),
         )
 
@@ -289,7 +294,32 @@ class TestSmtpStartTlsLogging:
             pass
 
         for call in mock_warning.call_args_list:
-            assert call.args[0] != "smtp_start_tls_disabled"
+            assert call.args[0] != "smtp_encryption_disabled"
+
+    def test_does_not_warn_when_implicit_tls_enabled(self, tmp_path, monkeypatch):
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text(SMTPS_CONFIG_YAML)
+        site_dir = tmp_path / "site"
+        site_dir.mkdir()
+
+        monkeypatch.setenv("TEST_SMTP_HOST", "localhost")
+        monkeypatch.setenv("TEST_SMTP_USER", "testuser")
+        monkeypatch.setenv("TEST_SMTP_PASSWORD", "testpass")
+
+        app.state.config_path = config_path
+        app.state.site_dir = site_dir
+
+        with (
+            patch("zeitfenster.app.fetch_and_compute", return_value={"60m": []}),
+            patch("zeitfenster.app.generate_placeholder"),
+            patch("zeitfenster.app.generate_site"),
+            patch("zeitfenster.app.logger.warning") as mock_warning,
+            TestClient(app),
+        ):
+            pass
+
+        for call in mock_warning.call_args_list:
+            assert call.args[0] != "smtp_encryption_disabled"
 
 
 class TestRefreshInterval:

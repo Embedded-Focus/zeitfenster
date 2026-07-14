@@ -128,7 +128,7 @@ The public page title is configured separately from generated calendar event tex
 
 Owner notification emails use `email.from_name` as the display name for the SMTP sender, defaulting to `Zeitfenster <SMTP_USER>`.
 
-`email.smtp_use_auth` controls whether SMTP credentials are sent at all, independently of `email.smtp_start_tls`; it defaults to `true`, so existing configs keep authenticating even if `smtp_start_tls` is `false`. Set `smtp_use_auth: false` explicitly only for relays that genuinely accept no authentication.
+`email.smtp_use_auth` controls whether SMTP credentials are sent at all. It is independent of the specific TLS mode, but authenticated SMTP now requires transport encryption: either `smtp_start_tls: true` or `smtp_use_tls: true`. If you disable STARTTLS for an SMTPS server, also set `smtp_use_tls: true` and usually `smtp_port: 465`. Set `smtp_use_auth: false` only for trusted relays that genuinely accept unauthenticated mail.
 
 On startup, Zeitfenster generates a placeholder page and retries availability generation if calendar sources are not ready yet. Startup regeneration retries use exponential backoff and can be tuned with `ZEITFENSTER_STARTUP_REGEN_MAX_ATTEMPTS` and `ZEITFENSTER_STARTUP_REGEN_INITIAL_DELAY_SECONDS`.
 
