@@ -10,6 +10,36 @@ from zeitfenster.config import IcsUrlSource
 
 logger = structlog.get_logger()
 ICS_FETCH_TIMEOUT_SECONDS = 10.0
+MAX_ICS_REDIRECTS = 5
+
+
+def _reject_non_https(url: httpx2.URL, context: str) -> None:
+    if url.scheme != "https":
+        raise ValueError(f"Refusing to fetch non-https ICS URL ({context}): {url}")
+
+
+def _fetch_ics_response(url: str) -> httpx2.Response:
+    current = httpx2.URL(url)
+    _reject_non_https(current, "source")
+    original_host = current.host
+
+    for _ in range(MAX_ICS_REDIRECTS):
+        response = httpx2.get(
+            current, timeout=ICS_FETCH_TIMEOUT_SECONDS, follow_redirects=False
+        )
+        if not response.has_redirect_location:
+            return response
+
+        target = response.url.join(response.headers["location"])
+        _reject_non_https(target, "redirect")
+        if target.host != original_host:
+            raise ValueError(
+                f"Refusing to follow cross-host ICS redirect from "
+                f"{original_host!r} to {target.host!r}"
+            )
+        current = target
+
+    raise ValueError(f"Too many redirects fetching ICS URL: {url!r}")
 
 
 def _coerce_calendar_datetime(
@@ -34,11 +64,7 @@ def fetch_busy_intervals_ics(
         range_start=range_start.isoformat(),
         range_end=range_end.isoformat(),
     )
-    response = httpx2.get(
-        source.url,
-        timeout=ICS_FETCH_TIMEOUT_SECONDS,
-        follow_redirects=True,
-    )
+    response = _fetch_ics_response(source.url)
     response.raise_for_status()
     data = response.content
 

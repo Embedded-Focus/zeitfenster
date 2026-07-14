@@ -37,6 +37,7 @@ Two containers in production:
 Zeitfenster is designed around a small public surface and a secret-free frontend container.
 
 - **Read-only calendars:** the app reads CalDAV and ICS sources, but never writes to calendars. Meeting requests are sent as draft `.ics` email attachments for manual import.
+- **ICS feed hardening:** `availability.ics_urls` entries must use `https://`; plain `http://` feeds are rejected at config load. Fetches never auto-follow redirects — each hop is resolved and checked manually, and the fetch is rejected if a redirect leaves `https` or points at a different host than the originally configured URL. This guards against a compromised or leaked feed URL being used to redirect the backend at internal/private addresses (SSRF). A rejected feed fails that regeneration cycle only; the previously generated site keeps serving its last known-good state instead of exposing a broken or manipulated result.
 - **Secret isolation:** Caddy serves static files and proxies selected requests, but does not receive CalDAV or SMTP credentials. Those stay in the internal Python app container.
 - **Unprivileged runtime:** the Python app container runs as a dedicated non-root user (fixed uid/gid `10001`), not root. `/site` is owned by that user so the shared `site-data` volume works without privilege escalation; bind-mounted config files must stay world-readable or be chowned to uid `10001` accordingly.
 - **No database or sessions:** state is derived from configuration, calendar reads, generated static files, and in-memory availability.
@@ -126,6 +127,8 @@ The public page title is configured separately from generated calendar event tex
 Owner notification emails use `email.from_name` as the display name for the SMTP sender, defaulting to `Zeitfenster <SMTP_USER>`.
 
 On startup, Zeitfenster generates a placeholder page and retries availability generation if calendar sources are not ready yet. Startup regeneration retries use exponential backoff and can be tuned with `ZEITFENSTER_STARTUP_REGEN_MAX_ATTEMPTS` and `ZEITFENSTER_STARTUP_REGEN_INITIAL_DELAY_SECONDS`.
+
+`availability.ics_urls` entries must use `https://` — configs with a plain `http://` feed URL fail to load with a validation error. If you're upgrading from an earlier version, update any `http://` ICS URLs before deploying.
 
 ## Branding And Colors
 

@@ -127,7 +127,7 @@ class TestFetchBusyIntervalsIcs:
         assert len(intervals) == 1
         assert intervals[0].start.hour == 14
 
-    def test_uses_timeout_and_follows_redirects(self):
+    def test_uses_timeout_and_disables_automatic_redirects(self):
         source = IcsUrlSource(url="https://example.com/cal.ics")
 
         with patch("zeitfenster.ics_client.httpx2.get") as mock_get:
@@ -139,9 +139,9 @@ class TestFetchBusyIntervalsIcs:
             )
 
         mock_get.assert_called_once_with(
-            "https://example.com/cal.ics",
+            httpx2.URL("https://example.com/cal.ics"),
             timeout=10.0,
-            follow_redirects=True,
+            follow_redirects=False,
         )
 
     def test_http_error_raises(self):
@@ -155,3 +155,82 @@ class TestFetchBusyIntervalsIcs:
                     datetime(2026, 7, 1, tzinfo=TZ),
                     datetime(2026, 7, 2, tzinfo=TZ),
                 )
+
+    def test_follows_same_host_redirect(self):
+        source = IcsUrlSource(url="https://example.com/cal.ics")
+        redirect = httpx2.Response(
+            302,
+            headers={"location": "https://example.com/other/cal.ics"},
+            request=httpx2.Request("GET", "https://example.com/cal.ics"),
+        )
+
+        with patch("zeitfenster.ics_client.httpx2.get") as mock_get:
+            mock_get.side_effect = [
+                redirect,
+                _make_response(NO_EVENTS_ICS, url="https://example.com/other/cal.ics"),
+            ]
+            intervals = fetch_busy_intervals_ics(
+                source,
+                datetime(2026, 7, 1, tzinfo=TZ),
+                datetime(2026, 7, 2, tzinfo=TZ),
+            )
+
+        assert intervals == []
+        assert mock_get.call_count == 2
+
+    def test_rejects_cross_host_redirect(self):
+        source = IcsUrlSource(url="https://example.com/cal.ics")
+        redirect = httpx2.Response(
+            302,
+            headers={"location": "https://internal.evil.example/steal"},
+            request=httpx2.Request("GET", "https://example.com/cal.ics"),
+        )
+
+        with patch("zeitfenster.ics_client.httpx2.get") as mock_get:
+            mock_get.return_value = redirect
+            with pytest.raises(ValueError, match="cross-host"):
+                fetch_busy_intervals_ics(
+                    source,
+                    datetime(2026, 7, 1, tzinfo=TZ),
+                    datetime(2026, 7, 2, tzinfo=TZ),
+                )
+
+        mock_get.assert_called_once()
+
+    def test_rejects_non_https_redirect(self):
+        source = IcsUrlSource(url="https://example.com/cal.ics")
+        redirect = httpx2.Response(
+            302,
+            headers={"location": "http://example.com/cal.ics"},
+            request=httpx2.Request("GET", "https://example.com/cal.ics"),
+        )
+
+        with patch("zeitfenster.ics_client.httpx2.get") as mock_get:
+            mock_get.return_value = redirect
+            with pytest.raises(ValueError, match="non-https"):
+                fetch_busy_intervals_ics(
+                    source,
+                    datetime(2026, 7, 1, tzinfo=TZ),
+                    datetime(2026, 7, 2, tzinfo=TZ),
+                )
+
+        mock_get.assert_called_once()
+
+    def test_rejects_too_many_redirects(self):
+        source = IcsUrlSource(url="https://example.com/cal.ics")
+        redirect = httpx2.Response(
+            302,
+            headers={"location": "https://example.com/cal.ics"},
+            request=httpx2.Request("GET", "https://example.com/cal.ics"),
+        )
+
+        with patch("zeitfenster.ics_client.httpx2.get") as mock_get:
+            mock_get.return_value = redirect
+            with pytest.raises(ValueError, match="Too many redirects"):
+                fetch_busy_intervals_ics(
+                    source,
+                    datetime(2026, 7, 1, tzinfo=TZ),
+                    datetime(2026, 7, 2, tzinfo=TZ),
+                )
+
+        assert mock_get.call_count == 5

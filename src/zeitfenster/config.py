@@ -76,6 +76,13 @@ class CalendarSource(BaseModel):
 class IcsUrlSource(BaseModel):
     url: str
 
+    @field_validator("url")
+    @classmethod
+    def _validate_https_scheme(cls, value: str) -> str:
+        if not value.startswith("https://"):
+            raise ValueError("ics_urls entries must use https://")
+        return value
+
 
 class ZeitfensterSource(BaseModel):
     url: str

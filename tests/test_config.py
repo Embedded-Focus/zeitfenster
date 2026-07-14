@@ -3,8 +3,9 @@ import tempfile
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
-from zeitfenster.config import AppConfig
+from zeitfenster.config import AppConfig, IcsUrlSource
 
 
 MINIMAL_YAML = """\
@@ -326,3 +327,17 @@ class TestZeitfensterSource:
                 _ = cfg.federation.free_slots_token
         finally:
             path.unlink()
+
+
+class TestIcsUrlSource:
+    def test_accepts_https_url(self):
+        source = IcsUrlSource(url="https://calendar.example.com/cal.ics")
+        assert source.url == "https://calendar.example.com/cal.ics"
+
+    def test_rejects_http_url(self):
+        with pytest.raises(ValidationError, match="https://"):
+            IcsUrlSource(url="http://calendar.example.com/cal.ics")
+
+    def test_rejects_non_http_scheme(self):
+        with pytest.raises(ValidationError, match="https://"):
+            IcsUrlSource(url="webcal://calendar.example.com/cal.ics")
