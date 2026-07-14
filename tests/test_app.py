@@ -96,6 +96,8 @@ ZERO_REFRESH_CONFIG_YAML = CUSTOM_REFRESH_CONFIG_YAML.replace(
     "refresh_interval: 0m",
 )
 
+START_TLS_DISABLED_CONFIG_YAML = CONFIG_YAML + "  smtp_start_tls: false\n"
+
 
 @pytest.fixture()
 def test_env(tmp_path, monkeypatch):
@@ -240,6 +242,52 @@ class TestFreeSlotsEndpoint:
             pass
 
         mock_info.assert_any_call("free_slots_auth_configured", enabled=True)
+
+
+class TestSmtpStartTlsLogging:
+    def test_warns_when_start_tls_disabled(self, tmp_path, monkeypatch):
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text(START_TLS_DISABLED_CONFIG_YAML)
+        site_dir = tmp_path / "site"
+        site_dir.mkdir()
+
+        monkeypatch.setenv("TEST_SMTP_HOST", "localhost")
+        monkeypatch.setenv("TEST_SMTP_USER", "testuser")
+        monkeypatch.setenv("TEST_SMTP_PASSWORD", "testpass")
+
+        app.state.config_path = config_path
+        app.state.site_dir = site_dir
+
+        with (
+            patch("zeitfenster.app.fetch_and_compute", return_value={"60m": []}),
+            patch("zeitfenster.app.generate_placeholder"),
+            patch("zeitfenster.app.generate_site"),
+            patch("zeitfenster.app.logger.warning") as mock_warning,
+            TestClient(app),
+        ):
+            pass
+
+        mock_warning.assert_any_call(
+            "smtp_start_tls_disabled",
+            message=(
+                "SMTP STARTTLS is disabled; booking emails (customer name, "
+                "email, and slot time) will be sent in plaintext unless the "
+                "relay is otherwise secured."
+            ),
+        )
+
+    def test_does_not_warn_when_start_tls_enabled(self, test_env):
+        with (
+            patch("zeitfenster.app.fetch_and_compute", return_value={"60m": []}),
+            patch("zeitfenster.app.generate_placeholder"),
+            patch("zeitfenster.app.generate_site"),
+            patch("zeitfenster.app.logger.warning") as mock_warning,
+            TestClient(app),
+        ):
+            pass
+
+        for call in mock_warning.call_args_list:
+            assert call.args[0] != "smtp_start_tls_disabled"
 
 
 class TestRefreshInterval:

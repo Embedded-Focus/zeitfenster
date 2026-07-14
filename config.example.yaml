@@ -97,3 +97,6 @@ email:
   smtp_user_env: SMTP_USER
   smtp_password_env: SMTP_PASSWORD
   smtp_start_tls: true
+  # Independent of smtp_start_tls: set to false only for relays that
+  # genuinely accept no authentication (e.g. a trusted local relay).
+  smtp_use_auth: true

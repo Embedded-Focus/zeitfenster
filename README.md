@@ -39,6 +39,7 @@ Zeitfenster is designed around a small public surface and a secret-free frontend
 - **Read-only calendars:** the app reads CalDAV and ICS sources, but never writes to calendars. Meeting requests are sent as draft `.ics` email attachments for manual import.
 - **ICS feed hardening:** `availability.ics_urls` entries must use `https://`; plain `http://` feeds are rejected at config load. Fetches never auto-follow redirects — each hop is resolved and checked manually, and the fetch is rejected if a redirect leaves `https` or points at a different host than the originally configured URL. This guards against a compromised or leaked feed URL being used to redirect the backend at internal/private addresses (SSRF). A rejected feed fails that regeneration cycle only; the previously generated site keeps serving its last known-good state instead of exposing a broken or manipulated result.
 - **Secret isolation:** Caddy serves static files and proxies selected requests, but does not receive CalDAV or SMTP credentials. Those stay in the internal Python app container.
+- **SMTP auth is independent of STARTTLS:** `email.smtp_use_auth` (default `true`) controls whether SMTP credentials are sent, separately from `email.smtp_start_tls`. Previously, disabling STARTTLS silently disabled auth too; now the two are decoupled, so turning off STARTTLS no longer has the side effect of also sending unauthenticated mail. A startup warning is logged whenever STARTTLS is disabled, since booking emails (customer name, email, slot time) then go out in plaintext.
 - **Unprivileged runtime:** the Python app container runs as a dedicated non-root user (fixed uid/gid `10001`), not root. `/site` is owned by that user so the shared `site-data` volume works without privilege escalation; bind-mounted config files must stay world-readable or be chowned to uid `10001` accordingly.
 - **No database or sessions:** state is derived from configuration, calendar reads, generated static files, and in-memory availability.
 - **Bounded booking input:** booking form fields are normalized and size-limited before use. Names reject control characters, and customer email addresses are checked for a valid basic shape with a dotted domain. The generated form mirrors key limits with native browser validation.
@@ -125,6 +126,8 @@ See `config.example.yaml` for all available options including working hours, slo
 The public page title is configured separately from generated calendar event text. Use `branding.title` for the booking page heading, and `booking.owner_name` plus `booking.summary_template` for the `.ics` event subject.
 
 Owner notification emails use `email.from_name` as the display name for the SMTP sender, defaulting to `Zeitfenster <SMTP_USER>`.
+
+`email.smtp_use_auth` controls whether SMTP credentials are sent at all, independently of `email.smtp_start_tls`; it defaults to `true`, so existing configs keep authenticating even if `smtp_start_tls` is `false`. Set `smtp_use_auth: false` explicitly only for relays that genuinely accept no authentication.
 
 On startup, Zeitfenster generates a placeholder page and retries availability generation if calendar sources are not ready yet. Startup regeneration retries use exponential backoff and can be tuned with `ZEITFENSTER_STARTUP_REGEN_MAX_ATTEMPTS` and `ZEITFENSTER_STARTUP_REGEN_INITIAL_DELAY_SECONDS`.
 

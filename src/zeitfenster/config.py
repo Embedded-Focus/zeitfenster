@@ -173,6 +173,7 @@ class Email(BaseModel):
     smtp_user_env: str = "SMTP_USER"
     smtp_password_env: str = "SMTP_PASSWORD"
     smtp_start_tls: bool = True
+    smtp_use_auth: bool = True
 
     @property
     def owner_list(self) -> list[str]:

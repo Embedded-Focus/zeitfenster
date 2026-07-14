@@ -95,6 +95,15 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
         "free_slots_auth_configured",
         enabled=free_slots_auth_enabled,
     )
+    if not config.email.smtp_start_tls:
+        logger.warning(
+            "smtp_start_tls_disabled",
+            message=(
+                "SMTP STARTTLS is disabled; booking emails (customer name, "
+                "email, and slot time) will be sent in plaintext unless the "
+                "relay is otherwise secured."
+            ),
+        )
 
     app.state.current_slots = {}
     app.state.booking_rate_limit_timestamps = deque()

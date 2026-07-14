@@ -52,8 +52,8 @@ async def send_booking_email(
         msg,
         hostname=config.smtp_host,
         port=config.smtp_port,
-        username=config.smtp_user if config.smtp_start_tls else None,
-        password=config.smtp_password if config.smtp_start_tls else None,
+        username=config.smtp_user if config.smtp_use_auth else None,
+        password=config.smtp_password if config.smtp_use_auth else None,
         start_tls=config.smtp_start_tls,
     )
 
