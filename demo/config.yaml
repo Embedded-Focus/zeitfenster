@@ -58,3 +58,4 @@ email:
   smtp_user_env: SMTP_USER
   smtp_password_env: SMTP_PASSWORD
   smtp_start_tls: false
+  smtp_use_auth: false

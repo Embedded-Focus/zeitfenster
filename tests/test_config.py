@@ -359,3 +359,21 @@ class TestEmailTlsOptions:
     def test_rejects_use_tls_and_start_tls_together(self):
         with pytest.raises(ValidationError, match="mutually exclusive"):
             Email(owner="owner@example.com", smtp_start_tls=True, smtp_use_tls=True)
+
+    def test_rejects_auth_without_any_encryption(self):
+        with pytest.raises(ValidationError, match="unencrypted connection"):
+            Email(
+                owner="owner@example.com",
+                smtp_start_tls=False,
+                smtp_use_tls=False,
+                smtp_use_auth=True,
+            )
+
+    def test_allows_no_auth_without_encryption(self):
+        email = Email(
+            owner="owner@example.com",
+            smtp_start_tls=False,
+            smtp_use_tls=False,
+            smtp_use_auth=False,
+        )
+        assert email.smtp_use_auth is False

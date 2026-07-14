@@ -81,11 +81,13 @@ async def test_sends_auth_credentials_by_default(monkeypatch):
 @pytest.mark.asyncio
 async def test_disabled_start_tls_still_sends_auth_credentials(monkeypatch):
     # Regression test: auth must not be silently disabled just because
-    # STARTTLS is off (they are independent settings).
+    # STARTTLS specifically is off (they are independent settings) — using
+    # implicit TLS here as the (required) encryption, since auth now always
+    # requires one encryption mode or the other.
     monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
     monkeypatch.setenv("SMTP_USER", "sender@example.com")
     monkeypatch.setenv("SMTP_PASSWORD", "secret")
-    config = Email(owner="owner@example.com", smtp_start_tls=False)
+    config = Email(owner="owner@example.com", smtp_start_tls=False, smtp_use_tls=True)
 
     with patch("zeitfenster.email.aiosmtplib.send", new_callable=AsyncMock) as send:
         await send_booking_email(
@@ -165,3 +167,28 @@ async def test_smtp_use_tls_defaults_to_false(monkeypatch):
         )
 
     assert send.call_args.kwargs["use_tls"] is False
+
+
+@pytest.mark.asyncio
+async def test_refuses_to_send_auth_over_unencrypted_connection(monkeypatch):
+    # Defense in depth: config.py's validator already makes this combination
+    # unconstructable via normal instantiation, but Pydantic doesn't
+    # re-validate on plain attribute assignment, so a future bug could still
+    # produce an inconsistent object. This guards the actual send call site.
+    monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
+    monkeypatch.setenv("SMTP_USER", "sender@example.com")
+    monkeypatch.setenv("SMTP_PASSWORD", "secret")
+    config = Email(owner="owner@example.com")
+    config.smtp_start_tls = False
+
+    with patch("zeitfenster.email.aiosmtplib.send", new_callable=AsyncMock) as send:
+        with pytest.raises(ValueError, match="unencrypted connection"):
+            await send_booking_email(
+                config=config,
+                customer_name="Alice",
+                customer_email="alice@example.com",
+                slot_summary="Monday, July 6 2026 10:00 - 11:00",
+                ics_data=b"BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n",
+            )
+
+    send.assert_not_called()

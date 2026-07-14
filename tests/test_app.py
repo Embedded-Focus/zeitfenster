@@ -96,7 +96,9 @@ ZERO_REFRESH_CONFIG_YAML = CUSTOM_REFRESH_CONFIG_YAML.replace(
     "refresh_interval: 0m",
 )
 
-START_TLS_DISABLED_CONFIG_YAML = CONFIG_YAML + "  smtp_start_tls: false\n"
+START_TLS_DISABLED_CONFIG_YAML = (
+    CONFIG_YAML + "  smtp_start_tls: false\n  smtp_use_auth: false\n"
+)
 
 
 @pytest.fixture()

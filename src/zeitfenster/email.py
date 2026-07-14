@@ -48,6 +48,11 @@ async def send_booking_email(
         slot=slot_summary,
     )
 
+    if config.smtp_use_auth and not (config.smtp_start_tls or config.smtp_use_tls):
+        raise ValueError(
+            "Refusing to send SMTP credentials over an unencrypted connection"
+        )
+
     await aiosmtplib.send(
         msg,
         hostname=config.smtp_host,

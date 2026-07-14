@@ -183,6 +183,12 @@ class Email(BaseModel):
                 "smtp_use_tls and smtp_start_tls are mutually exclusive; set "
                 "smtp_start_tls: false when using smtp_use_tls (implicit TLS)"
             )
+        if self.smtp_use_auth and not (self.smtp_start_tls or self.smtp_use_tls):
+            raise ValueError(
+                "smtp_use_auth requires smtp_start_tls or smtp_use_tls to be "
+                "enabled; sending SMTP credentials over an unencrypted "
+                "connection is not allowed"
+            )
         return self
 
     @property
