@@ -1,4 +1,25 @@
+<div align="center">
+
+<img src="assets/zeitfenster_logo.png" alt="Zeitfenster" width="260">
+
 # Zeitfenster
+
+*Minimal, self-hosted appointment request service.*
+
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python 3.14](https://img.shields.io/badge/Python-3.14-3776AB?logo=python&logoColor=white)](pyproject.toml)
+[![FastAPI](https://img.shields.io/badge/FastAPI-service-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Docker](https://img.shields.io/badge/Docker-supported-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
+[![uv](https://img.shields.io/badge/uv-supported-DE5FE9)](https://docs.astral.sh/uv/)
+[![Last commit](https://img.shields.io/github/last-commit/Embedded-Focus/zeitfenster?logo=github)](https://github.com/Embedded-Focus/zeitfenster/commits/main)
+
+**[How It Works](#how-it-works)** ·
+**[Security](#security)** ·
+**[Quick Start](#quick-start-demo)** ·
+**[Federation](#federation)** ·
+**[Configuration](#configuration)**
+
+</div>
 
 Minimal, self-hosted appointment request service. Reads existing calendars (CalDAV, ICS feeds) to compute availability and presents free slots on a web page. Customers pick a slot and submit their contact details — you receive an email with an `.ics` draft event to import, edit, and use for the calendar invitation.
 
