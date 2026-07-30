@@ -14,6 +14,26 @@ from zeitfenster.booking_request import (
 TZ = ZoneInfo("Europe/Vienna")
 
 
+def _valid_form_data(**overrides):
+    data = {
+        "message_enabled": False,
+        "name": "Alice",
+        "email": "alice@example.com",
+        "description": "",
+        "slot_start": "2026-07-06T10:00:00+02:00",
+        "slot_end": "2026-07-06T11:00:00+02:00",
+        "duration": "60m",
+        "website": "",
+    }
+    data.update(overrides)
+    return data
+
+
+def _assert_http_error(exc_info, *, status_code: int, detail: str):
+    assert exc_info.value.status_code == status_code
+    assert exc_info.value.detail == detail
+
+
 def test_validate_booking_form_fields_normalizes_enabled_message():
     fields = validate_booking_form_fields(
         message_enabled=True,
@@ -50,6 +70,30 @@ def test_validate_booking_form_fields_ignores_message_when_disabled():
     assert fields.description == ""
 
 
+@pytest.mark.parametrize(
+    ("field", "value", "detail"),
+    [
+        ("name", "   ", "name is required"),
+        ("name", "A" * 101, "name is too long"),
+        ("name", "Alice\nBob", "name contains invalid characters"),
+        ("email", "x", "email is too short"),
+        ("email", "not-an-email", "Invalid email"),
+        ("email", "foo@bar", "Invalid email"),
+        ("email", "alice bob@example.com", "Invalid email"),
+        ("email", "a" * 247 + "@example.com", "email is too long"),
+        ("slot_start", "2" * 65, "slot_start is too long"),
+        ("slot_end", "2" * 65, "slot_end is too long"),
+        ("duration", "x" * 17, "duration is too long"),
+        ("website", "x" * 2049, "website is too long"),
+    ],
+)
+def test_validate_booking_form_fields_rejects_invalid_fields(field, value, detail):
+    with pytest.raises(HTTPException) as exc_info:
+        validate_booking_form_fields(**_valid_form_data(**{field: value}))
+
+    _assert_http_error(exc_info, status_code=400, detail=detail)
+
+
 def test_validate_booking_form_fields_honeypot_short_circuits_other_fields():
     fields = validate_booking_form_fields(
         message_enabled=True,
@@ -78,26 +122,26 @@ def test_validate_booking_form_fields_honeypot_short_circuits_other_fields():
 def test_validate_booking_form_fields_rejects_invalid_message(description, detail):
     with pytest.raises(HTTPException) as exc_info:
         validate_booking_form_fields(
-            message_enabled=True,
-            name="Alice",
-            email="alice@example.com",
-            description=description,
-            slot_start="2026-07-06T10:00:00+02:00",
-            slot_end="2026-07-06T11:00:00+02:00",
-            duration="60m",
-            website="",
+            **_valid_form_data(message_enabled=True, description=description)
         )
 
-    assert exc_info.value.status_code == 400
-    assert exc_info.value.detail == detail
+    _assert_http_error(exc_info, status_code=400, detail=detail)
 
 
-def test_parse_booking_datetime_requires_timezone():
+@pytest.mark.parametrize(
+    ("value", "field_name", "detail"),
+    [
+        ("not-a-date", "slot_start", "Invalid slot_start"),
+        ("not-a-date", "slot_end", "Invalid slot_end"),
+        ("2026-07-06T10:00:00", "slot_start", "slot_start must include a timezone"),
+        ("2026-07-06T11:00:00", "slot_end", "slot_end must include a timezone"),
+    ],
+)
+def test_parse_booking_datetime_rejects_invalid_values(value, field_name, detail):
     with pytest.raises(HTTPException) as exc_info:
-        parse_booking_datetime("2026-07-06T10:00:00", "slot_start")
+        parse_booking_datetime(value, field_name)
 
-    assert exc_info.value.status_code == 400
-    assert exc_info.value.detail == "slot_start must include a timezone"
+    _assert_http_error(exc_info, status_code=400, detail=detail)
 
 
 def test_validate_requested_slot_returns_matching_slot():
@@ -119,15 +163,66 @@ def test_validate_requested_slot_returns_matching_slot():
     )
 
 
-def test_validate_requested_slot_rejects_unavailable_slot():
+@pytest.mark.parametrize(
+    ("current_slots", "configured_durations", "duration", "start", "end", "detail"),
+    [
+        (
+            {"60m": []},
+            ["60m"],
+            "60m",
+            datetime(2026, 7, 6, 10, 0, tzinfo=TZ),
+            datetime(2026, 7, 6, 11, 0, tzinfo=TZ),
+            "Requested slot is not available",
+        ),
+        (
+            {"60m": []},
+            ["60m"],
+            "90m",
+            datetime(2026, 7, 6, 10, 0, tzinfo=TZ),
+            datetime(2026, 7, 6, 11, 0, tzinfo=TZ),
+            "Invalid duration",
+        ),
+        (
+            {
+                "60m": [
+                    FreeSlot(
+                        start=datetime(2026, 7, 6, 10, 0, tzinfo=TZ),
+                        end=datetime(2026, 7, 6, 12, 0, tzinfo=TZ),
+                        duration=timedelta(hours=2),
+                    ),
+                ]
+            },
+            ["60m"],
+            "60m",
+            datetime(2026, 7, 6, 10, 0, tzinfo=TZ),
+            datetime(2026, 7, 6, 12, 0, tzinfo=TZ),
+            "Requested slot duration does not match",
+        ),
+        (
+            {"60m": []},
+            ["60m"],
+            "60m",
+            datetime(2026, 7, 6, 11, 0, tzinfo=TZ),
+            datetime(2026, 7, 6, 10, 0, tzinfo=TZ),
+            "slot_end must be after slot_start",
+        ),
+    ],
+)
+def test_validate_requested_slot_rejects_invalid_requests(
+    current_slots,
+    configured_durations,
+    duration,
+    start,
+    end,
+    detail,
+):
     with pytest.raises(HTTPException) as exc_info:
         validate_requested_slot(
-            current_slots={"60m": []},
-            configured_durations=["60m"],
-            duration="60m",
-            start=datetime(2026, 7, 6, 10, 0, tzinfo=TZ),
-            end=datetime(2026, 7, 6, 11, 0, tzinfo=TZ),
+            current_slots=current_slots,
+            configured_durations=configured_durations,
+            duration=duration,
+            start=start,
+            end=end,
         )
 
-    assert exc_info.value.status_code == 400
-    assert exc_info.value.detail == "Requested slot is not available"
+    _assert_http_error(exc_info, status_code=400, detail=detail)
