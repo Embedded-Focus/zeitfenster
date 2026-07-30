@@ -502,12 +502,14 @@ class TestBookEndpoint:
     @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
     def test_booking_fields_are_normalized(self, mock_send, client):
         self._set_available_slot(client)
+        client.app.state.config.booking.message_enabled = True
         with patch("zeitfenster.app._regenerate", new_callable=AsyncMock):
             response = client.post(
                 "/book",
                 data=self._valid_booking_data(
                     name="  Alice  ",
                     email="  alice@example.com  ",
+                    description="  Project kickoff\r\nBring notes\tplease  ",
                     slot_start="  2026-07-06T10:00:00+02:00  ",
                     slot_end="  2026-07-06T11:00:00+02:00  ",
                     duration="  60m  ",
@@ -518,6 +520,56 @@ class TestBookEndpoint:
         call_kwargs = mock_send.call_args
         assert call_kwargs[1]["customer_name"] == "Alice"
         assert call_kwargs[1]["customer_email"] == "alice@example.com"
+        assert (
+            call_kwargs[1]["customer_description"]
+            == "Project kickoff\nBring notes\tplease"
+        )
+
+    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    def test_booking_message_is_included_when_enabled(self, mock_send, client):
+        self._set_available_slot(client)
+        client.app.state.config.booking.message_enabled = True
+        client.app.state.config.booking.description_template = (
+            "Customer message:\n{customer_description}"
+        )
+
+        with patch("zeitfenster.app._regenerate", new_callable=AsyncMock):
+            response = client.post(
+                "/book",
+                data=self._valid_booking_data(
+                    description="I want to discuss the launch plan."
+                ),
+            )
+
+        assert response.status_code == 200
+        assert mock_send.call_args.kwargs["customer_description"] == (
+            "I want to discuss the launch plan."
+        )
+        ics_data = mock_send.call_args.kwargs["ics_data"]
+        cal = Calendar.from_ical(ics_data)
+        event = [c for c in cal.walk() if c.name == "VEVENT"][0]
+        assert "I want to discuss the launch plan." in str(event["description"])
+
+    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    def test_posted_message_is_ignored_when_disabled(self, mock_send, client):
+        self._set_available_slot(client)
+        client.app.state.config.booking.message_enabled = False
+        client.app.state.config.booking.description_template = (
+            "Customer message:\n{customer_description}"
+        )
+
+        with patch("zeitfenster.app._regenerate", new_callable=AsyncMock):
+            response = client.post(
+                "/book",
+                data=self._valid_booking_data(description="Direct post message"),
+            )
+
+        assert response.status_code == 200
+        assert mock_send.call_args.kwargs["customer_description"] == ""
+        ics_data = mock_send.call_args.kwargs["ics_data"]
+        cal = Calendar.from_ical(ics_data)
+        event = [c for c in cal.walk() if c.name == "VEVENT"][0]
+        assert "Direct post message" not in str(event["description"])
 
     @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
     def test_rfc_style_owner_mailbox_is_normalized_for_booking_ics(
@@ -568,12 +620,14 @@ class TestBookEndpoint:
     def test_honeypot_does_not_validate_other_fields_or_regenerate(
         self, mock_send, client
     ):
+        client.app.state.config.booking.message_enabled = True
         with patch("zeitfenster.app._regenerate", new_callable=AsyncMock) as mock_regen:
             response = client.post(
                 "/book",
                 data=self._valid_booking_data(
                     name="A" * 101,
                     email="not-an-email",
+                    description="x" * 1001,
                     website="http://spam.example.com",
                 ),
             )
@@ -714,6 +768,29 @@ class TestBookEndpoint:
             response = client.post(
                 "/book",
                 data=self._valid_booking_data(**{field: value}),
+            )
+        assert response.status_code == 400
+        assert response.json()["detail"] == detail
+        mock_send.assert_not_called()
+        mock_regen.assert_not_called()
+
+    @pytest.mark.parametrize(
+        ("value", "detail"),
+        [
+            ("x" * 1001, "description is too long"),
+            ("Project kickoff\x00", "description contains invalid characters"),
+        ],
+    )
+    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    def test_rejects_invalid_message_when_enabled(
+        self, mock_send, client, value, detail
+    ):
+        self._set_available_slot(client)
+        client.app.state.config.booking.message_enabled = True
+        with patch("zeitfenster.app._regenerate", new_callable=AsyncMock) as mock_regen:
+            response = client.post(
+                "/book",
+                data=self._valid_booking_data(description=value),
             )
         assert response.status_code == 400
         assert response.json()["detail"] == detail

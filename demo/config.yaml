@@ -35,7 +35,11 @@ availability:
       password_env: CALDAV_PASSWORD
 booking:
   owner_name: "Jane Doe"
+  message_enabled: true
   summary_template: "{customer_name} and {owner_name}"
+  description_template: |
+    Customer message:
+    {customer_description}
 
 rules:
   timezone: Europe/Vienna

@@ -148,6 +148,8 @@ See `config.example.yaml` for all available options including working hours, slo
 
 The public page title is configured separately from generated calendar event text. Use `branding.title` for the booking page heading, and `booking.owner_name` plus `booking.summary_template` for the `.ics` event subject.
 
+Set `booking.message_enabled: true` to show an optional `Message` field on the public booking form. Messages are included in the owner notification email. They are only included in attached `.ics` files when `booking.description_template` explicitly uses `{customer_description}`, so enabling the field does not unexpectedly change calendar draft content.
+
 Owner notification emails use `email.from_name` as the display name for the SMTP sender, defaulting to `Zeitfenster <SMTP_USER>`.
 
 `email.smtp_use_auth` controls whether SMTP credentials are sent at all. It is independent of the specific TLS mode, but authenticated SMTP now requires transport encryption: either `smtp_start_tls: true` or `smtp_use_tls: true`. If you disable STARTTLS for an SMTPS server, also set `smtp_use_tls: true` and usually `smtp_port: 465`. Set `smtp_use_auth: false` only for trusted relays that genuinely accept unauthenticated mail.

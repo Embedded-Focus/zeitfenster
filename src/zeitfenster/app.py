@@ -4,6 +4,7 @@ import json
 import os
 from collections import deque
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from datetime import datetime
 from email.utils import parseaddr
 from pathlib import Path
@@ -40,11 +41,23 @@ STARTUP_REGEN_INITIAL_DELAY_SECONDS = float(
 )
 MAX_NAME_LENGTH = 100
 MAX_EMAIL_LENGTH = 254
+MAX_DESCRIPTION_LENGTH = 1000
 MAX_DATETIME_LENGTH = 64
 MAX_DURATION_LENGTH = 16
 MAX_HONEYPOT_LENGTH = 2048
 MAX_CAP_TOKEN_LENGTH = 4096
 CAPTCHA_VERIFY_TIMEOUT_SECONDS = 5.0
+
+
+@dataclass(frozen=True)
+class BookingFormFields:
+    name: str
+    email: str
+    description: str
+    slot_start: str
+    slot_end: str
+    duration: str
+    website: str
 
 
 async def _regenerate(app_instance: FastAPI) -> bool:
@@ -248,26 +261,62 @@ def _validate_customer_email(value: str) -> str:
     return email
 
 
+def _validate_customer_description(value: str) -> str:
+    normalized = value.replace("\r\n", "\n").replace("\r", "\n").strip()
+    if len(normalized) > MAX_DESCRIPTION_LENGTH:
+        raise HTTPException(status_code=400, detail="description is too long")
+
+    for char in normalized:
+        if char in {"\n", "\t"}:
+            continue
+        if ord(char) < 32 or ord(char) == 127:
+            raise HTTPException(
+                status_code=400,
+                detail="description contains invalid characters",
+            )
+
+    return normalized
+
+
 def _validate_booking_form_fields(
     *,
+    config: AppConfig,
     name: str,
     email: str,
+    description: str,
     slot_start: str,
     slot_end: str,
     duration: str,
     website: str,
-) -> tuple[str, str, str, str, str, str]:
+) -> BookingFormFields:
     validated_website = _validate_bounded_field(website, "website", MAX_HONEYPOT_LENGTH)
     if validated_website:
-        return ("", "", "", "", "", validated_website)
+        return BookingFormFields(
+            name="",
+            email="",
+            description="",
+            slot_start="",
+            slot_end="",
+            duration="",
+            website=validated_website,
+        )
 
-    return (
-        _validate_customer_name(name),
-        _validate_customer_email(email),
-        _validate_bounded_field(slot_start, "slot_start", MAX_DATETIME_LENGTH),
-        _validate_bounded_field(slot_end, "slot_end", MAX_DATETIME_LENGTH),
-        _validate_bounded_field(duration, "duration", MAX_DURATION_LENGTH),
-        validated_website,
+    return BookingFormFields(
+        name=_validate_customer_name(name),
+        email=_validate_customer_email(email),
+        description=(
+            _validate_customer_description(description)
+            if config.booking.message_enabled
+            else ""
+        ),
+        slot_start=_validate_bounded_field(
+            slot_start,
+            "slot_start",
+            MAX_DATETIME_LENGTH,
+        ),
+        slot_end=_validate_bounded_field(slot_end, "slot_end", MAX_DATETIME_LENGTH),
+        duration=_validate_bounded_field(duration, "duration", MAX_DURATION_LENGTH),
+        website=validated_website,
     )
 
 
@@ -354,6 +403,7 @@ async def book(
     request: Request,
     name: str = Form(),
     email: str = Form(),
+    description: str = Form(default=""),
     slot_start: str = Form(),
     slot_end: str = Form(),
     duration: str = Form(),
@@ -362,29 +412,29 @@ async def book(
 ) -> HTMLResponse:
     config: AppConfig = request.app.state.config
     site_dir: Path = request.app.state.site_dir
-    name, email, slot_start, slot_end, duration, website = (
-        _validate_booking_form_fields(
-            name=name,
-            email=email,
-            slot_start=slot_start,
-            slot_end=slot_end,
-            duration=duration,
-            website=website,
-        )
+    form_fields = _validate_booking_form_fields(
+        config=config,
+        name=name,
+        email=email,
+        description=description,
+        slot_start=slot_start,
+        slot_end=slot_end,
+        duration=duration,
+        website=website,
     )
 
-    if website:
+    if form_fields.website:
         logger.info("honeypot_triggered")
         return HTMLResponse(_read_thankyou(site_dir))
 
     await _verify_captcha_token(config, cap_token)
 
-    start = _parse_booking_datetime(slot_start, "slot_start")
-    end = _parse_booking_datetime(slot_end, "slot_end")
+    start = _parse_booking_datetime(form_fields.slot_start, "slot_start")
+    end = _parse_booking_datetime(form_fields.slot_end, "slot_end")
     requested_slot = _validate_requested_slot(
         request=request,
         config=config,
-        duration=duration,
+        duration=form_fields.duration,
         start=start,
         end=end,
     )
@@ -398,8 +448,9 @@ async def book(
     ics_data = build_booking_ics(
         owner_email=owner_email,
         owner_name=owner_name,
-        customer_name=name,
-        customer_email=email,
+        customer_name=form_fields.name,
+        customer_email=form_fields.email,
+        customer_description=form_fields.description,
         start=requested_slot.start,
         end=requested_slot.end,
         summary_template=config.booking.summary_template,
@@ -410,13 +461,18 @@ async def book(
     try:
         await send_booking_email(
             config=config.email,
-            customer_name=name,
-            customer_email=email,
+            customer_name=form_fields.name,
+            customer_email=form_fields.email,
+            customer_description=form_fields.description,
             slot_summary=slot_summary,
             ics_data=ics_data,
         )
     except Exception:
-        logger.exception("email_send_failed", customer=email, slot=slot_summary)
+        logger.exception(
+            "email_send_failed",
+            customer=form_fields.email,
+            slot=slot_summary,
+        )
 
     _schedule_regeneration(request.app)
 

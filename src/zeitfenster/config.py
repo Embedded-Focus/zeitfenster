@@ -7,8 +7,12 @@ from urllib.parse import urlsplit
 import yaml
 from pydantic import BaseModel, field_validator, model_validator
 
-DESCRIPTION_TEMPLATE_FIELDS = {"customer_name", "customer_email"}
-SUMMARY_TEMPLATE_FIELDS = {
+BOOKING_DESCRIPTION_TEMPLATE_FIELDS = {
+    "customer_name",
+    "customer_email",
+    "customer_description",
+}
+BOOKING_SUMMARY_TEMPLATE_FIELDS = {
     "customer_name",
     "customer_email",
     "owner_name",
@@ -185,6 +189,7 @@ class Captcha(BaseModel):
 class Booking(BaseModel):
     location: str | None = None
     owner_name: str | None = None
+    message_enabled: bool = False
     summary_template: str = "{customer_name}"
     description_template: str = ""
 
@@ -193,7 +198,7 @@ class Booking(BaseModel):
     def _validate_summary_template(cls, value: str) -> str:
         return _validate_template_fields(
             value,
-            allowed_fields=SUMMARY_TEMPLATE_FIELDS,
+            allowed_fields=BOOKING_SUMMARY_TEMPLATE_FIELDS,
         )
 
     @field_validator("description_template")
@@ -201,7 +206,7 @@ class Booking(BaseModel):
     def _validate_description_template(cls, value: str) -> str:
         return _validate_template_fields(
             value,
-            allowed_fields=DESCRIPTION_TEMPLATE_FIELDS,
+            allowed_fields=BOOKING_DESCRIPTION_TEMPLATE_FIELDS,
         )
 
 

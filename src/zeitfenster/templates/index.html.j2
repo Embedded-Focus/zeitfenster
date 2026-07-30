@@ -71,6 +71,11 @@
         <label for="bf-email">Email
             <input type="email" id="bf-email" name="email" required maxlength="254" pattern="[^@\s]+@[^@\s]+\.[^@\s]+" title="Enter an email address with a domain, for example name@example.com" placeholder="your@email.com">
         </label>
+        {% if booking.message_enabled %}
+        <label for="bf-description">Message
+            <textarea id="bf-description" name="description" maxlength="1000" rows="4" placeholder="What would you like to discuss?"></textarea>
+        </label>
+        {% endif %}
         <button type="submit">Send Request</button>
     </div>
 </template>

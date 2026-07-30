@@ -135,6 +135,36 @@ class TestBuildBookingIcs:
         assert "Request from Alice at alice@example.com." in str(event["description"])
         assert "Meeting link already configured." in str(event["description"])
 
+    def test_customer_description_is_available_to_description_template(self):
+        data = build_booking_ics(
+            owner_email="owner@example.com",
+            customer_name="Alice",
+            customer_email="alice@example.com",
+            start=datetime(2026, 7, 6, 10, 0, tzinfo=TZ),
+            end=datetime(2026, 7, 6, 11, 0, tzinfo=TZ),
+            customer_description="Discuss launch plan.",
+            description_template="Message:\n{customer_description}",
+        )
+        cal = Calendar.from_ical(data)
+        event = [c for c in cal.walk() if c.name == "VEVENT"][0]
+
+        assert "Discuss launch plan." in str(event["description"])
+
+    def test_customer_description_is_omitted_when_template_does_not_include_it(self):
+        data = build_booking_ics(
+            owner_email="owner@example.com",
+            customer_name="Alice",
+            customer_email="alice@example.com",
+            start=datetime(2026, 7, 6, 10, 0, tzinfo=TZ),
+            end=datetime(2026, 7, 6, 11, 0, tzinfo=TZ),
+            customer_description="Do not include this.",
+            description_template="Request from {customer_name}",
+        )
+        cal = Calendar.from_ical(data)
+        event = [c for c in cal.walk() if c.name == "VEVENT"][0]
+
+        assert "Do not include this." not in str(event["description"])
+
     def test_summary_includes_customer_and_owner_names(self):
         data = build_booking_ics(
             owner_email="owner@example.com",

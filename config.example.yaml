@@ -79,11 +79,15 @@ booking:
   location: https://meet.example.com/my-room
   # Optional display name for the owner in generated calendar content.
   owner_name: "Jane Doe"
+  # Show an optional "Message" textarea on the public booking form.
+  message_enabled: false
   # Subject/title for the generated owner-side .ics event.
   # Available placeholders: {customer_name}, {customer_email}, {owner_name}, {owner_email}
   summary_template: "{customer_name} and {owner_name}"
   # Body text for the generated owner-side .ics event.
-  # Available placeholders: {customer_name}, {customer_email}
+  # Available placeholders: {customer_name}, {customer_email}, {customer_description}
+  # Customer messages only appear in .ics files if this template includes
+  # {customer_description}.
   description_template: ""
 
 rules:

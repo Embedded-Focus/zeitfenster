@@ -66,6 +66,7 @@ def build_booking_ics(
     customer_email: str,
     start: datetime,
     end: datetime,
+    customer_description: str = "",
     owner_name: str | None = None,
     summary_template: str = "{customer_name}",
     location: str | None = None,
@@ -98,6 +99,7 @@ def build_booking_ics(
         description_template.format(
             customer_name=customer_name,
             customer_email=customer_email,
+            customer_description=customer_description,
         ),
     )
     if location:

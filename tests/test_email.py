@@ -39,6 +39,51 @@ async def test_booking_email_explains_draft_ics_workflow(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_booking_email_includes_customer_description_when_present(monkeypatch):
+    monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
+    monkeypatch.setenv("SMTP_USER", "sender@example.com")
+    monkeypatch.setenv("SMTP_PASSWORD", "secret")
+    config = Email(owner="owner@example.com")
+
+    with patch("zeitfenster.email.aiosmtplib.send", new_callable=AsyncMock) as send:
+        await send_booking_email(
+            config=config,
+            customer_name="Alice",
+            customer_email="alice@example.com",
+            slot_summary="Monday, July 6 2026 10:00 - 11:00",
+            ics_data=b"BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n",
+            customer_description="Discuss launch plan.",
+        )
+
+    message = send.call_args.args[0]
+    body = message.get_body(preferencelist=("plain",)).get_content()
+
+    assert "Description:\nDiscuss launch plan." in body
+
+
+@pytest.mark.asyncio
+async def test_booking_email_omits_empty_customer_description(monkeypatch):
+    monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
+    monkeypatch.setenv("SMTP_USER", "sender@example.com")
+    monkeypatch.setenv("SMTP_PASSWORD", "secret")
+    config = Email(owner="owner@example.com")
+
+    with patch("zeitfenster.email.aiosmtplib.send", new_callable=AsyncMock) as send:
+        await send_booking_email(
+            config=config,
+            customer_name="Alice",
+            customer_email="alice@example.com",
+            slot_summary="Monday, July 6 2026 10:00 - 11:00",
+            ics_data=b"BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n",
+        )
+
+    message = send.call_args.args[0]
+    body = message.get_body(preferencelist=("plain",)).get_content()
+
+    assert "Description:" not in body
+
+
+@pytest.mark.asyncio
 async def test_booking_email_uses_configured_from_name(monkeypatch):
     monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
     monkeypatch.setenv("SMTP_USER", "sender@example.com")

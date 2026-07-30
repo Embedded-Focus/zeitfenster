@@ -66,6 +66,7 @@ def generate_site(
     template_data = _prepare_slots_for_template(slots_by_duration)
     context = {
         "branding": config.branding,
+        "booking": config.booking,
         "captcha": config.captcha,
         "slots_by_duration": template_data,
     }

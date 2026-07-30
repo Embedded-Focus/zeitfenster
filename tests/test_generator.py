@@ -145,6 +145,7 @@ class TestGenerateSite:
             assert "onclick=" not in html
             assert 'maxlength="100"' in html
             assert 'maxlength="254"' in html
+            assert 'name="description"' not in html
             assert 'pattern="[^@\\s]+@[^@\\s]+\\.[^@\\s]+"' in html
             assert "--pico-background-color: #101820" in html
             assert "--pico-color: #f5f7fa" in html
@@ -160,6 +161,18 @@ class TestGenerateSite:
             thankyou_html = thankyou.read_text()
             assert "Your meeting request has been received." in thankyou_html
             assert "not confirmed" in thankyou_html
+
+    def test_generates_message_field_when_enabled(self):
+        config = _make_config()
+        config.booking.message_enabled = True
+        with tempfile.TemporaryDirectory() as tmp:
+            generate_site(_make_fake_slots(), config, tmp)
+
+            html = (Path(tmp) / "index.html").read_text()
+            assert '<label for="bf-description">Message' in html
+            assert 'name="description"' in html
+            assert 'maxlength="1000"' in html
+            assert 'placeholder="What would you like to discuss?"' in html
 
     def test_copies_custom_static_files(self):
         config = _make_config()

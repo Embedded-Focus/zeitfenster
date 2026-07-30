@@ -73,9 +73,11 @@ availability:
 booking:
   location: https://meet.example.com/room
   owner_name: "Jane Doe"
+  message_enabled: true
   summary_template: "{customer_name} and {owner_name}"
   description_template: |
-    Booking request from {customer_name} <{customer_email}>.
+    Booking request from {customer_name} <{customer_email}>:
+    {customer_description}
     Meeting link is already configured.
 
 rules:
@@ -129,6 +131,7 @@ class TestMinimalConfig:
             assert cfg.availability.calendars == []
             assert cfg.booking.location is None
             assert cfg.booking.owner_name is None
+            assert cfg.booking.message_enabled is False
             assert cfg.booking.summary_template == "{customer_name}"
             assert cfg.booking.description_template == ""
         finally:
@@ -167,6 +170,7 @@ class TestFullConfig:
             assert cfg.rules.refresh_interval == "10m"
             assert cfg.booking.location == "https://meet.example.com/room"
             assert cfg.booking.owner_name == "Jane Doe"
+            assert cfg.booking.message_enabled is True
             assert cfg.booking.summary_template == "{customer_name} and {owner_name}"
             assert "Meeting link is already configured." in (
                 cfg.booking.description_template
@@ -189,6 +193,21 @@ email:
         try:
             with pytest.raises(ValueError, match="calendar_name"):
                 AppConfig.from_yaml(path)
+        finally:
+            path.unlink()
+
+    def test_description_template_accepts_customer_description(self):
+        path = _write_yaml(
+            """\
+booking:
+  description_template: "Message: {customer_description}"
+email:
+  owner: owner@example.com
+"""
+        )
+        try:
+            cfg = AppConfig.from_yaml(path)
+            assert cfg.booking.description_template == "Message: {customer_description}"
         finally:
             path.unlink()
 
