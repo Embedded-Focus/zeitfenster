@@ -1,25 +1,21 @@
 import asyncio
 import hmac
-import json
 import os
 from collections import deque
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
-from datetime import datetime
-from email.utils import parseaddr
 from pathlib import Path
-from time import monotonic
 
-import httpx2
 import structlog
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
 from zeitfenster.availability import FreeSlot, fetch_and_compute
+from zeitfenster.booking_service import (
+    RawBookingForm,
+    handle_booking_request,
+)
 from zeitfenster.config import AppConfig
-from zeitfenster.email import send_booking_email
 from zeitfenster.generator import generate_placeholder, generate_site
-from zeitfenster.ics import build_booking_ics, normalize_mailbox
 from zeitfenster.parsing import parse_duration
 
 logger = structlog.get_logger()
@@ -39,25 +35,6 @@ STARTUP_REGEN_MAX_ATTEMPTS = int(
 STARTUP_REGEN_INITIAL_DELAY_SECONDS = float(
     os.environ.get("ZEITFENSTER_STARTUP_REGEN_INITIAL_DELAY_SECONDS", "1")
 )
-MAX_NAME_LENGTH = 100
-MAX_EMAIL_LENGTH = 254
-MAX_DESCRIPTION_LENGTH = 1000
-MAX_DATETIME_LENGTH = 64
-MAX_DURATION_LENGTH = 16
-MAX_HONEYPOT_LENGTH = 2048
-MAX_CAP_TOKEN_LENGTH = 4096
-CAPTCHA_VERIFY_TIMEOUT_SECONDS = 5.0
-
-
-@dataclass(frozen=True)
-class BookingFormFields:
-    name: str
-    email: str
-    description: str
-    slot_start: str
-    slot_end: str
-    duration: str
-    website: str
 
 
 async def _regenerate(app_instance: FastAPI) -> bool:
@@ -189,215 +166,6 @@ def _schedule_regeneration(app_instance: FastAPI) -> None:
     )
 
 
-def _enforce_booking_rate_limit(app_instance: FastAPI) -> None:
-    timestamps: deque[float] = getattr(
-        app_instance.state, "booking_rate_limit_timestamps", deque()
-    )
-    app_instance.state.booking_rate_limit_timestamps = timestamps
-
-    now = monotonic()
-    window_start = now - BOOKING_RATE_LIMIT_WINDOW_SECONDS
-    while timestamps and timestamps[0] <= window_start:
-        timestamps.popleft()
-
-    if len(timestamps) >= BOOKING_RATE_LIMIT_MAX:
-        raise HTTPException(status_code=429, detail="Too many booking requests")
-
-    timestamps.append(now)
-
-
-def _has_control_characters(value: str) -> bool:
-    return any(ord(char) < 32 or ord(char) == 127 for char in value)
-
-
-def _validate_bounded_field(
-    value: str,
-    field_name: str,
-    max_length: int,
-) -> str:
-    normalized = value.strip()
-    if len(normalized) > max_length:
-        raise HTTPException(
-            status_code=400,
-            detail=f"{field_name} is too long",
-        )
-    return normalized
-
-
-def _validate_customer_name(value: str) -> str:
-    name = _validate_bounded_field(value, "name", MAX_NAME_LENGTH)
-    if not name:
-        raise HTTPException(status_code=400, detail="name is required")
-    if _has_control_characters(name):
-        raise HTTPException(
-            status_code=400,
-            detail="name contains invalid characters",
-        )
-    return name
-
-
-def _validate_customer_email(value: str) -> str:
-    email = _validate_bounded_field(value, "email", MAX_EMAIL_LENGTH)
-    if len(email) < 3:
-        raise HTTPException(status_code=400, detail="email is too short")
-    if _has_control_characters(email) or any(char.isspace() for char in email):
-        raise HTTPException(status_code=400, detail="Invalid email")
-
-    display_name, parsed_email = parseaddr(email)
-    if display_name or parsed_email != email or email.count("@") != 1:
-        raise HTTPException(status_code=400, detail="Invalid email")
-
-    local_part, domain = email.rsplit("@", 1)
-    if (
-        not local_part
-        or not domain
-        or "." not in domain
-        or domain.startswith(".")
-        or domain.endswith(".")
-        or ".." in domain
-    ):
-        raise HTTPException(status_code=400, detail="Invalid email")
-
-    return email
-
-
-def _validate_customer_description(value: str) -> str:
-    normalized = value.replace("\r\n", "\n").replace("\r", "\n").strip()
-    if len(normalized) > MAX_DESCRIPTION_LENGTH:
-        raise HTTPException(status_code=400, detail="description is too long")
-
-    for char in normalized:
-        if char in {"\n", "\t"}:
-            continue
-        if ord(char) < 32 or ord(char) == 127:
-            raise HTTPException(
-                status_code=400,
-                detail="description contains invalid characters",
-            )
-
-    return normalized
-
-
-def _validate_booking_form_fields(
-    *,
-    config: AppConfig,
-    name: str,
-    email: str,
-    description: str,
-    slot_start: str,
-    slot_end: str,
-    duration: str,
-    website: str,
-) -> BookingFormFields:
-    validated_website = _validate_bounded_field(website, "website", MAX_HONEYPOT_LENGTH)
-    if validated_website:
-        return BookingFormFields(
-            name="",
-            email="",
-            description="",
-            slot_start="",
-            slot_end="",
-            duration="",
-            website=validated_website,
-        )
-
-    return BookingFormFields(
-        name=_validate_customer_name(name),
-        email=_validate_customer_email(email),
-        description=(
-            _validate_customer_description(description)
-            if config.booking.message_enabled
-            else ""
-        ),
-        slot_start=_validate_bounded_field(
-            slot_start,
-            "slot_start",
-            MAX_DATETIME_LENGTH,
-        ),
-        slot_end=_validate_bounded_field(slot_end, "slot_end", MAX_DATETIME_LENGTH),
-        duration=_validate_bounded_field(duration, "duration", MAX_DURATION_LENGTH),
-        website=validated_website,
-    )
-
-
-def _parse_booking_datetime(value: str, field_name: str) -> datetime:
-    try:
-        parsed = datetime.fromisoformat(value)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid {field_name}",
-        ) from exc
-    if parsed.tzinfo is None or parsed.utcoffset() is None:
-        raise HTTPException(
-            status_code=400,
-            detail=f"{field_name} must include a timezone",
-        )
-    return parsed
-
-
-def _validate_requested_slot(
-    *,
-    request: Request,
-    config: AppConfig,
-    duration: str,
-    start: datetime,
-    end: datetime,
-) -> FreeSlot:
-    if end <= start:
-        raise HTTPException(status_code=400, detail="slot_end must be after slot_start")
-
-    if duration not in config.rules.slot_durations:
-        raise HTTPException(status_code=400, detail="Invalid duration")
-
-    if end - start != parse_duration(duration):
-        raise HTTPException(
-            status_code=400,
-            detail="Requested slot duration does not match",
-        )
-
-    current_slots: dict[str, list[FreeSlot]] = getattr(
-        request.app.state, "current_slots", {}
-    )
-    matching_slots = current_slots.get(duration, [])
-    for slot in matching_slots:
-        if slot.start == start and slot.end == end:
-            return slot
-
-    raise HTTPException(status_code=400, detail="Requested slot is not available")
-
-
-async def _verify_captcha_token(config: AppConfig, token: str) -> None:
-    if not config.captcha.enabled:
-        return
-
-    token = _validate_bounded_field(token, "cap-token", MAX_CAP_TOKEN_LENGTH)
-    if not token:
-        raise HTTPException(status_code=400, detail="CAPTCHA token is required")
-
-    try:
-        response = await asyncio.to_thread(
-            httpx2.post,
-            config.captcha.siteverify_url,
-            json={"secret": config.captcha.secret, "response": token},
-            timeout=CAPTCHA_VERIFY_TIMEOUT_SECONDS,
-            follow_redirects=False,
-        )
-        response.raise_for_status()
-        data = json.loads(response.content)
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.warning("captcha_verification_unavailable")
-        raise HTTPException(
-            status_code=503,
-            detail="CAPTCHA verification is unavailable",
-        ) from exc
-
-    if data.get("success") is not True:
-        raise HTTPException(status_code=400, detail="CAPTCHA verification failed")
-
-
 @app.post("/book", response_class=HTMLResponse)
 async def book(
     request: Request,
@@ -412,69 +180,41 @@ async def book(
 ) -> HTMLResponse:
     config: AppConfig = request.app.state.config
     site_dir: Path = request.app.state.site_dir
-    form_fields = _validate_booking_form_fields(
+    current_slots: dict[str, list[FreeSlot]] = getattr(
+        request.app.state,
+        "current_slots",
+        {},
+    )
+    booking_rate_limit_timestamps: deque[float] = getattr(
+        request.app.state,
+        "booking_rate_limit_timestamps",
+        deque(),
+    )
+    request.app.state.booking_rate_limit_timestamps = booking_rate_limit_timestamps
+
+    result = await handle_booking_request(
         config=config,
-        name=name,
-        email=email,
-        description=description,
-        slot_start=slot_start,
-        slot_end=slot_end,
-        duration=duration,
-        website=website,
+        current_slots=current_slots,
+        booking_rate_limit_timestamps=booking_rate_limit_timestamps,
+        booking_rate_limit_max=BOOKING_RATE_LIMIT_MAX,
+        booking_rate_limit_window_seconds=BOOKING_RATE_LIMIT_WINDOW_SECONDS,
+        form=RawBookingForm(
+            name=name,
+            email=email,
+            description=description,
+            slot_start=slot_start,
+            slot_end=slot_end,
+            duration=duration,
+            website=website,
+            cap_token=cap_token,
+        ),
     )
 
-    if form_fields.website:
-        logger.info("honeypot_triggered")
+    if result.honeypot_triggered:
         return HTMLResponse(_read_thankyou(site_dir))
 
-    await _verify_captcha_token(config, cap_token)
-
-    start = _parse_booking_datetime(form_fields.slot_start, "slot_start")
-    end = _parse_booking_datetime(form_fields.slot_end, "slot_end")
-    requested_slot = _validate_requested_slot(
-        request=request,
-        config=config,
-        duration=form_fields.duration,
-        start=start,
-        end=end,
-    )
-    _enforce_booking_rate_limit(request.app)
-
-    slot_summary = f"{start.strftime('%A, %B %-d %Y %H:%M')} – {end.strftime('%H:%M')}"
-
-    owner_email, parsed_owner_name = normalize_mailbox(config.email.owner_list[0])
-    owner_name = config.booking.owner_name or parsed_owner_name
-
-    ics_data = build_booking_ics(
-        owner_email=owner_email,
-        owner_name=owner_name,
-        customer_name=form_fields.name,
-        customer_email=form_fields.email,
-        customer_description=form_fields.description,
-        start=requested_slot.start,
-        end=requested_slot.end,
-        summary_template=config.booking.summary_template,
-        location=config.booking.location,
-        description_template=config.booking.description_template,
-    )
-
-    try:
-        await send_booking_email(
-            config=config.email,
-            customer_name=form_fields.name,
-            customer_email=form_fields.email,
-            customer_description=form_fields.description,
-            slot_summary=slot_summary,
-            ics_data=ics_data,
-        )
-    except Exception:
-        logger.exception(
-            "email_send_failed",
-            customer=form_fields.email,
-            slot=slot_summary,
-        )
-
-    _schedule_regeneration(request.app)
+    if result.accepted:
+        _schedule_regeneration(request.app)
 
     return HTMLResponse(_read_thankyou(site_dir))
 

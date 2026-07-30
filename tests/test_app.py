@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from icalendar import Calendar
 
 import zeitfenster.app as app_module
+import zeitfenster.captcha as captcha_module
 from zeitfenster.app import app
 from zeitfenster.availability import FreeSlot
 from zeitfenster.config import AppConfig
@@ -484,7 +485,7 @@ class TestBookEndpoint:
             ]
         }
 
-    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    @patch("zeitfenster.booking_service.send_booking_email", new_callable=AsyncMock)
     def test_successful_booking(self, mock_send, client, test_env):
         self._set_available_slot(client)
         with patch("zeitfenster.app._regenerate", new_callable=AsyncMock):
@@ -499,7 +500,7 @@ class TestBookEndpoint:
         assert call_kwargs[1]["customer_name"] == "Alice"
         assert call_kwargs[1]["customer_email"] == "alice@example.com"
 
-    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    @patch("zeitfenster.booking_service.send_booking_email", new_callable=AsyncMock)
     def test_booking_fields_are_normalized(self, mock_send, client):
         self._set_available_slot(client)
         client.app.state.config.booking.message_enabled = True
@@ -525,7 +526,7 @@ class TestBookEndpoint:
             == "Project kickoff\nBring notes\tplease"
         )
 
-    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    @patch("zeitfenster.booking_service.send_booking_email", new_callable=AsyncMock)
     def test_booking_message_is_included_when_enabled(self, mock_send, client):
         self._set_available_slot(client)
         client.app.state.config.booking.message_enabled = True
@@ -550,7 +551,7 @@ class TestBookEndpoint:
         event = [c for c in cal.walk() if c.name == "VEVENT"][0]
         assert "I want to discuss the launch plan." in str(event["description"])
 
-    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    @patch("zeitfenster.booking_service.send_booking_email", new_callable=AsyncMock)
     def test_posted_message_is_ignored_when_disabled(self, mock_send, client):
         self._set_available_slot(client)
         client.app.state.config.booking.message_enabled = False
@@ -571,7 +572,7 @@ class TestBookEndpoint:
         event = [c for c in cal.walk() if c.name == "VEVENT"][0]
         assert "Direct post message" not in str(event["description"])
 
-    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    @patch("zeitfenster.booking_service.send_booking_email", new_callable=AsyncMock)
     def test_rfc_style_owner_mailbox_is_normalized_for_booking_ics(
         self, mock_send, client
     ):
@@ -598,7 +599,7 @@ class TestBookEndpoint:
         assert event["dtstart"].params["TZID"] == "Europe/Vienna"
         assert event["dtend"].params["TZID"] == "Europe/Vienna"
 
-    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    @patch("zeitfenster.booking_service.send_booking_email", new_callable=AsyncMock)
     def test_honeypot_blocks_spam(self, mock_send, client):
         with patch("zeitfenster.app._regenerate", new_callable=AsyncMock):
             response = client.post(
@@ -616,7 +617,7 @@ class TestBookEndpoint:
         assert "Thank you" in response.text
         mock_send.assert_not_called()
 
-    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    @patch("zeitfenster.booking_service.send_booking_email", new_callable=AsyncMock)
     def test_honeypot_does_not_validate_other_fields_or_regenerate(
         self, mock_send, client
     ):
@@ -636,11 +637,11 @@ class TestBookEndpoint:
         mock_send.assert_not_called()
         mock_regen.assert_not_called()
 
-    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    @patch("zeitfenster.booking_service.send_booking_email", new_callable=AsyncMock)
     def test_honeypot_does_not_verify_captcha(self, mock_send, client, monkeypatch):
         self._enable_captcha(client, monkeypatch)
         with (
-            patch("zeitfenster.app.httpx2.post") as mock_post,
+            patch("zeitfenster.captcha.httpx2.post") as mock_post,
             patch("zeitfenster.app._regenerate", new_callable=AsyncMock) as mock_regen,
         ):
             response = client.post(
@@ -653,14 +654,14 @@ class TestBookEndpoint:
         mock_send.assert_not_called()
         mock_regen.assert_not_called()
 
-    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    @patch("zeitfenster.booking_service.send_booking_email", new_callable=AsyncMock)
     def test_rejects_missing_captcha_token_when_enabled(
         self, mock_send, client, monkeypatch
     ):
         self._enable_captcha(client, monkeypatch)
         self._set_available_slot(client)
         with (
-            patch("zeitfenster.app.httpx2.post") as mock_post,
+            patch("zeitfenster.captcha.httpx2.post") as mock_post,
             patch("zeitfenster.app._regenerate", new_callable=AsyncMock) as mock_regen,
         ):
             response = client.post("/book", data=self._valid_booking_data())
@@ -671,7 +672,7 @@ class TestBookEndpoint:
         mock_send.assert_not_called()
         mock_regen.assert_not_called()
 
-    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    @patch("zeitfenster.booking_service.send_booking_email", new_callable=AsyncMock)
     def test_rejects_failed_captcha_before_email_and_regeneration(
         self, mock_send, client, monkeypatch
     ):
@@ -679,7 +680,7 @@ class TestBookEndpoint:
         self._set_available_slot(client)
         with (
             patch(
-                "zeitfenster.app.httpx2.post",
+                "zeitfenster.captcha.httpx2.post",
                 return_value=self._cap_response(False),
             ) as mock_post,
             patch("zeitfenster.app._regenerate", new_callable=AsyncMock) as mock_regen,
@@ -694,13 +695,13 @@ class TestBookEndpoint:
         mock_post.assert_called_once_with(
             "https://cap.example.com/site-key/siteverify",
             json={"secret": "cap-secret", "response": "bad-token"},
-            timeout=app_module.CAPTCHA_VERIFY_TIMEOUT_SECONDS,
+            timeout=captcha_module.CAPTCHA_VERIFY_TIMEOUT_SECONDS,
             follow_redirects=False,
         )
         mock_send.assert_not_called()
         mock_regen.assert_not_called()
 
-    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    @patch("zeitfenster.booking_service.send_booking_email", new_callable=AsyncMock)
     def test_captcha_verification_unavailable_fails_closed(
         self, mock_send, client, monkeypatch
     ):
@@ -708,7 +709,7 @@ class TestBookEndpoint:
         self._set_available_slot(client)
         with (
             patch(
-                "zeitfenster.app.httpx2.post",
+                "zeitfenster.captcha.httpx2.post",
                 side_effect=httpx2.ConnectError("offline"),
             ),
             patch("zeitfenster.app._regenerate", new_callable=AsyncMock) as mock_regen,
@@ -723,13 +724,13 @@ class TestBookEndpoint:
         mock_send.assert_not_called()
         mock_regen.assert_not_called()
 
-    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    @patch("zeitfenster.booking_service.send_booking_email", new_callable=AsyncMock)
     def test_successful_booking_with_captcha(self, mock_send, client, monkeypatch):
         self._enable_captcha(client, monkeypatch)
         self._set_available_slot(client)
         with (
             patch(
-                "zeitfenster.app.httpx2.post",
+                "zeitfenster.captcha.httpx2.post",
                 return_value=self._cap_response(True),
             ) as mock_post,
             patch("zeitfenster.app._regenerate", new_callable=AsyncMock),
@@ -761,7 +762,7 @@ class TestBookEndpoint:
             ("website", "x" * 2049, "website is too long"),
         ],
     )
-    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    @patch("zeitfenster.booking_service.send_booking_email", new_callable=AsyncMock)
     def test_rejects_invalid_form_fields(self, mock_send, client, field, value, detail):
         self._set_available_slot(client)
         with patch("zeitfenster.app._regenerate", new_callable=AsyncMock) as mock_regen:
@@ -781,7 +782,7 @@ class TestBookEndpoint:
             ("Project kickoff\x00", "description contains invalid characters"),
         ],
     )
-    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    @patch("zeitfenster.booking_service.send_booking_email", new_callable=AsyncMock)
     def test_rejects_invalid_message_when_enabled(
         self, mock_send, client, value, detail
     ):
@@ -797,7 +798,7 @@ class TestBookEndpoint:
         mock_send.assert_not_called()
         mock_regen.assert_not_called()
 
-    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    @patch("zeitfenster.booking_service.send_booking_email", new_callable=AsyncMock)
     def test_rate_limit_blocks_repeated_valid_bookings(
         self, mock_send, client, monkeypatch
     ):
@@ -817,7 +818,7 @@ class TestBookEndpoint:
         assert mock_send.await_count == 2
         assert mock_regen.await_count <= 2
 
-    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    @patch("zeitfenster.booking_service.send_booking_email", new_callable=AsyncMock)
     def test_repeated_valid_bookings_coalesce_regeneration(self, mock_send, client):
         self._set_available_slot(client)
 
@@ -833,7 +834,7 @@ class TestBookEndpoint:
         assert mock_send.await_count == 2
         assert regen.call_count == 1
 
-    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    @patch("zeitfenster.booking_service.send_booking_email", new_callable=AsyncMock)
     def test_rejects_slot_not_in_current_availability(self, mock_send, client):
         self._set_available_slot(client)
         with patch("zeitfenster.app._regenerate", new_callable=AsyncMock) as mock_regen:
@@ -853,7 +854,7 @@ class TestBookEndpoint:
         mock_send.assert_not_called()
         mock_regen.assert_not_called()
 
-    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    @patch("zeitfenster.booking_service.send_booking_email", new_callable=AsyncMock)
     def test_rejects_stale_slot_when_current_availability_is_empty(
         self, mock_send, client
     ):
@@ -875,7 +876,7 @@ class TestBookEndpoint:
         mock_send.assert_not_called()
         mock_regen.assert_not_called()
 
-    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    @patch("zeitfenster.booking_service.send_booking_email", new_callable=AsyncMock)
     def test_rejects_duration_not_in_config(self, mock_send, client):
         self._set_available_slot(client)
         with patch("zeitfenster.app._regenerate", new_callable=AsyncMock) as mock_regen:
@@ -895,7 +896,7 @@ class TestBookEndpoint:
         mock_send.assert_not_called()
         mock_regen.assert_not_called()
 
-    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    @patch("zeitfenster.booking_service.send_booking_email", new_callable=AsyncMock)
     def test_rejects_mismatched_duration(self, mock_send, client):
         client.app.state.current_slots = {
             "60m": [
@@ -923,7 +924,7 @@ class TestBookEndpoint:
         mock_send.assert_not_called()
         mock_regen.assert_not_called()
 
-    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    @patch("zeitfenster.booking_service.send_booking_email", new_callable=AsyncMock)
     def test_rejects_slot_end_before_slot_start(self, mock_send, client):
         self._set_available_slot(client)
         with patch("zeitfenster.app._regenerate", new_callable=AsyncMock) as mock_regen:
@@ -943,7 +944,7 @@ class TestBookEndpoint:
         mock_send.assert_not_called()
         mock_regen.assert_not_called()
 
-    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    @patch("zeitfenster.booking_service.send_booking_email", new_callable=AsyncMock)
     def test_rejects_malformed_slot_start(self, mock_send, client):
         self._set_available_slot(client)
         with patch("zeitfenster.app._regenerate", new_callable=AsyncMock) as mock_regen:
@@ -963,7 +964,7 @@ class TestBookEndpoint:
         mock_send.assert_not_called()
         mock_regen.assert_not_called()
 
-    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    @patch("zeitfenster.booking_service.send_booking_email", new_callable=AsyncMock)
     def test_rejects_malformed_slot_end(self, mock_send, client):
         self._set_available_slot(client)
         with patch("zeitfenster.app._regenerate", new_callable=AsyncMock) as mock_regen:
@@ -983,7 +984,7 @@ class TestBookEndpoint:
         mock_send.assert_not_called()
         mock_regen.assert_not_called()
 
-    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    @patch("zeitfenster.booking_service.send_booking_email", new_callable=AsyncMock)
     def test_rejects_naive_slot_start(self, mock_send, client):
         self._set_available_slot(client)
         with patch("zeitfenster.app._regenerate", new_callable=AsyncMock) as mock_regen:
@@ -1003,7 +1004,7 @@ class TestBookEndpoint:
         mock_send.assert_not_called()
         mock_regen.assert_not_called()
 
-    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    @patch("zeitfenster.booking_service.send_booking_email", new_callable=AsyncMock)
     def test_rejects_naive_slot_end(self, mock_send, client):
         self._set_available_slot(client)
         with patch("zeitfenster.app._regenerate", new_callable=AsyncMock) as mock_regen:
@@ -1030,7 +1031,7 @@ class TestBookEndpoint:
         )
         assert response.status_code == 422
 
-    @patch("zeitfenster.app.send_booking_email", new_callable=AsyncMock)
+    @patch("zeitfenster.booking_service.send_booking_email", new_callable=AsyncMock)
     def test_email_failure_still_returns_thankyou(self, mock_send, client):
         self._set_available_slot(client)
         mock_send.side_effect = ConnectionError("SMTP down")
