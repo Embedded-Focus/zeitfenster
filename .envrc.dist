@@ -1,5 +1,15 @@
-use flake "path:."
-PATH_add .venv/bin
-set -a
-eval $(sops --decrypt .env)
-set +a
+eval "$(devenv direnvrc)"
+
+use devenv
+
+if [ -f .env.enc ]; then
+    set -a
+    eval $(sops --decrypt --input-type dotenv --output-type dotenv .env.enc)
+    set +a
+fi
+
+if [ -f .env ]; then
+    set -a
+    . .env
+    set +a
+fi
