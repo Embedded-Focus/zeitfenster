@@ -5,7 +5,7 @@ services:
       - "8080:80"
     volumes:
       - site-data:/site:ro
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../Caddyfile:/etc/caddy/Caddyfile:ro
     environment:
       ZEITFENSTER_ALLOWED_EMBED_ORIGINS: "${ZEITFENSTER_ALLOWED_EMBED_ORIGINS:-'none'}"
     depends_on:
@@ -14,12 +14,12 @@ services:
       - frontend
 
   app:
-    build: .
+    build: ..
     volumes:
       - site-data:/site
-      - ./demo/config.yaml:/etc/zeitfenster/config.yaml:ro
+      - ./config.yaml:/etc/zeitfenster/config.yaml:ro
     env_file:
-      - ./demo/.env
+      - ./.env
     depends_on:
       init-calendars:
         condition: service_completed_successfully
@@ -34,8 +34,8 @@ services:
   radicale:
     image: tomsquest/docker-radicale:latest
     volumes:
-      - ./demo/radicale/config:/config/config:ro
-      - ./demo/radicale/users:/config/users:ro
+      - ./radicale/config:/config/config:ro
+      - ./radicale/users:/config/users:ro
       - radicale-data:/data
     networks:
       - backend
@@ -45,7 +45,7 @@ services:
   init-calendars:
     image: curlimages/curl:latest
     volumes:
-      - ./demo/init-calendars.sh:/init-calendars.sh:ro
+      - ./init-calendars.sh:/init-calendars.sh:ro
     entrypoint: ["/bin/sh", "/init-calendars.sh"]
     depends_on:
       - radicale

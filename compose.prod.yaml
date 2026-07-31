@@ -1,15 +1,23 @@
 services:
   caddy:
-    ports: !reset []
+    image: caddy:2-alpine
+    volumes:
+      - site-data:/site:ro
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    environment:
+      ZEITFENSTER_ALLOWED_EMBED_ORIGINS: "${ZEITFENSTER_ALLOWED_EMBED_ORIGINS:-'none'}"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.zeitfenster.rule=Host(`booking.example.com`)"
       - "traefik.http.services.zeitfenster.loadbalancer.server.port=80"
+    depends_on:
+      - app
     networks:
       - frontend
       - traefik
 
   app:
+    image: "${IMAGE:-registry.example.com/zeitfenster/zeitfenster}:${TAG:-1.0.0}"
     volumes:
       - site-data:/site
       - /etc/zeitfenster/config.yaml:/etc/zeitfenster/config.yaml:ro
@@ -18,14 +26,15 @@ services:
       ZEITFENSTER_CUSTOM_STATIC_DIR: /etc/zeitfenster/static
     env_file:
       - .env
-    depends_on: !reset []
     networks:
       - frontend
-      - backend
+    expose:
+      - "8000"
 
-  radicale: !reset null
-  mailpit: !reset null
+volumes:
+  site-data:
 
 networks:
+  frontend:
   traefik:
     external: true

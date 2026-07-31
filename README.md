@@ -103,11 +103,10 @@ src/zeitfenster/
 └── static/                 Pico CSS + custom styles
 
 tests/                  Unit and integration tests
-demo/                   Demo environment (Radicale config, sample calendars, .env)
+demo/                   Demo environment (Compose, Radicale config, sample calendars, .env)
 Dockerfile              Multi-stage build
 Caddyfile               Caddy reverse proxy config
-compose.yaml            Demo environment (Caddy + app + Radicale + Mailpit)
-compose.prod.yaml       Production override (Traefik labels, no demo services)
+compose.prod.yaml       Production Compose file (Caddy + app + Traefik labels)
 pod.yaml                Podman kube reference (production)
 config.example.yaml     Example configuration
 ```

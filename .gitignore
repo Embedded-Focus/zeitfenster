@@ -22,12 +22,10 @@ tests/output/
 .env
 .agent-circus/
 .direnv/
+.env.enc
 
 # Internal-only documents (not for the public repo)
 SECURITY_REVIEW.md
 
 .devenv/
 .direnv/
-
-.env
-.env.enc

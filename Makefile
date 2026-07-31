@@ -25,13 +25,13 @@ push: ## Push OCI image with Podman
 	podman push $(IMAGE):$(TAG)
 
 up: ## Start demo environment
-	docker compose up --build -d
+	docker compose -f demo/compose.yaml up --build -d
 
 down: ## Stop demo environment
-	docker compose down
+	docker compose -f demo/compose.yaml down
 
 logs: ## Follow demo environment logs
-	docker compose logs -f
+	docker compose -f demo/compose.yaml logs -f
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
