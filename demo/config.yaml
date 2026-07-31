@@ -1,3 +1,4 @@
+---
 branding:
   title: "Book a Meeting"
   logo: "/static/logo.svg"
@@ -33,6 +34,18 @@ availability:
     - url: http://radicale:5232/reader/personal/
       username: reader
       password_env: CALDAV_PASSWORD
+
+# nextcloud_talk:
+#   enabled: false
+#   base_url: https://cloud.example.com
+#   username_env: NEXTCLOUD_TALK_USER
+#   app_password_env: NEXTCLOUD_TALK_APP_PASSWORD
+#   room_name_template: "Meeting with {customer_name}"
+#   room_description_template: "{customer_description}"
+#   # Optional; omit for passwordless client access.
+#   # room_password_env: NEXTCLOUD_TALK_ROOM_PASSWORD
+#   required: false
+
 booking:
   owner_name: "Jane Doe"
   message_enabled: true

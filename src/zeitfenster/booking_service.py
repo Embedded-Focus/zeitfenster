@@ -2,6 +2,7 @@ from collections import deque
 from dataclasses import dataclass
 
 import structlog
+from fastapi import HTTPException
 
 from zeitfenster.availability import FreeSlot
 from zeitfenster.booking_request import (
@@ -13,6 +14,11 @@ from zeitfenster.captcha import verify_captcha_token
 from zeitfenster.config import AppConfig
 from zeitfenster.email import send_booking_email
 from zeitfenster.ics import build_booking_ics, normalize_mailbox
+from zeitfenster.nextcloud_talk_client import (
+    NextcloudTalkBookingContext,
+    NextcloudTalkError,
+    create_talk_room,
+)
 from zeitfenster.rate_limit import enforce_booking_rate_limit
 
 logger = structlog.get_logger()
@@ -81,6 +87,30 @@ async def handle_booking_request(
 
     owner_email, parsed_owner_name = normalize_mailbox(config.email.owner_list[0])
     owner_name = config.booking.owner_name or parsed_owner_name
+    owner_display_name = owner_name or owner_email
+    meeting_url = None
+
+    if config.nextcloud_talk.enabled:
+        try:
+            meeting_url = await create_talk_room(
+                config=config.nextcloud_talk,
+                context=NextcloudTalkBookingContext(
+                    customer_name=form_fields.name,
+                    customer_email=form_fields.email,
+                    customer_description=form_fields.description,
+                    owner_name=owner_display_name,
+                    owner_email=owner_email,
+                    slot_start=requested_slot.start,
+                    slot_end=requested_slot.end,
+                ),
+            )
+        except NextcloudTalkError as exc:
+            logger.warning("nextcloud_talk_room_creation_failed", error=str(exc))
+            if config.nextcloud_talk.required:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Nextcloud Talk room creation is unavailable",
+                ) from exc
 
     ics_data = build_booking_ics(
         owner_email=owner_email,
@@ -93,6 +123,7 @@ async def handle_booking_request(
         summary_template=config.booking.summary_template,
         location=config.booking.location,
         description_template=config.booking.description_template,
+        meeting_url=meeting_url,
     )
 
     try:
@@ -103,6 +134,7 @@ async def handle_booking_request(
             customer_description=form_fields.description,
             slot_summary=slot_summary,
             ics_data=ics_data,
+            meeting_url=meeting_url,
         )
     except Exception:
         logger.exception(

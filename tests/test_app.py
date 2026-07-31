@@ -14,6 +14,7 @@ from zeitfenster.app import app
 from zeitfenster.availability import FreeSlot
 from zeitfenster.config import AppConfig
 from zeitfenster.generator import generate_site
+from zeitfenster.nextcloud_talk_client import NextcloudTalkError
 
 TZ = ZoneInfo("Europe/Vienna")
 
@@ -485,6 +486,15 @@ class TestBookEndpoint:
             ]
         }
 
+    def _enable_nextcloud_talk(self, client, *, required=False):
+        client.app.state.config.nextcloud_talk.enabled = True
+        client.app.state.config.nextcloud_talk.base_url = "https://cloud.example.com"
+        client.app.state.config.nextcloud_talk.username_env = "NEXTCLOUD_TALK_USER"
+        client.app.state.config.nextcloud_talk.app_password_env = (
+            "NEXTCLOUD_TALK_APP_PASSWORD"
+        )
+        client.app.state.config.nextcloud_talk.required = required
+
     @patch("zeitfenster.booking_service.send_booking_email", new_callable=AsyncMock)
     def test_successful_booking(self, mock_send, client, test_env):
         self._set_available_slot(client)
@@ -550,6 +560,81 @@ class TestBookEndpoint:
         cal = Calendar.from_ical(ics_data)
         event = [c for c in cal.walk() if c.name == "VEVENT"][0]
         assert "I want to discuss the launch plan." in str(event["description"])
+
+    @patch("zeitfenster.booking_service.create_talk_room", new_callable=AsyncMock)
+    @patch("zeitfenster.booking_service.send_booking_email", new_callable=AsyncMock)
+    def test_booking_includes_nextcloud_talk_url_when_enabled(
+        self,
+        mock_send,
+        mock_create_talk_room,
+        client,
+    ):
+        self._set_available_slot(client)
+        self._enable_nextcloud_talk(client)
+        mock_create_talk_room.return_value = "https://cloud.example.com/call/abc123"
+
+        with patch("zeitfenster.app._regenerate", new_callable=AsyncMock):
+            response = client.post(
+                "/book",
+                data=self._valid_booking_data(),
+            )
+
+        assert response.status_code == 200
+        mock_create_talk_room.assert_awaited_once()
+        assert mock_send.call_args.kwargs["meeting_url"] == (
+            "https://cloud.example.com/call/abc123"
+        )
+        ics_data = mock_send.call_args.kwargs["ics_data"]
+        cal = Calendar.from_ical(ics_data)
+        event = [c for c in cal.walk() if c.name == "VEVENT"][0]
+        assert event["location"] == "https://cloud.example.com/call/abc123"
+
+    @patch("zeitfenster.booking_service.create_talk_room", new_callable=AsyncMock)
+    @patch("zeitfenster.booking_service.send_booking_email", new_callable=AsyncMock)
+    def test_optional_nextcloud_talk_failure_still_sends_email(
+        self,
+        mock_send,
+        mock_create_talk_room,
+        client,
+    ):
+        self._set_available_slot(client)
+        self._enable_nextcloud_talk(client, required=False)
+        mock_create_talk_room.side_effect = NextcloudTalkError("offline")
+
+        with patch("zeitfenster.app._regenerate", new_callable=AsyncMock):
+            response = client.post(
+                "/book",
+                data=self._valid_booking_data(),
+            )
+
+        assert response.status_code == 200
+        mock_send.assert_awaited_once()
+        assert mock_send.call_args.kwargs["meeting_url"] is None
+
+    @patch("zeitfenster.booking_service.create_talk_room", new_callable=AsyncMock)
+    @patch("zeitfenster.booking_service.send_booking_email", new_callable=AsyncMock)
+    def test_required_nextcloud_talk_failure_blocks_email_and_regeneration(
+        self,
+        mock_send,
+        mock_create_talk_room,
+        client,
+    ):
+        self._set_available_slot(client)
+        self._enable_nextcloud_talk(client, required=True)
+        mock_create_talk_room.side_effect = NextcloudTalkError("offline")
+
+        with patch("zeitfenster.app._regenerate", new_callable=AsyncMock) as mock_regen:
+            response = client.post(
+                "/book",
+                data=self._valid_booking_data(),
+            )
+
+        assert response.status_code == 503
+        assert response.json()["detail"] == (
+            "Nextcloud Talk room creation is unavailable"
+        )
+        mock_send.assert_not_called()
+        mock_regen.assert_not_called()
 
     @patch("zeitfenster.booking_service.send_booking_email", new_callable=AsyncMock)
     def test_posted_message_is_ignored_when_disabled(self, mock_send, client):
@@ -786,7 +871,14 @@ class TestBookEndpoint:
         self, mock_send, client
     ):
         self._set_available_slot(client)
-        with patch("zeitfenster.app._regenerate", new_callable=AsyncMock) as mock_regen:
+        self._enable_nextcloud_talk(client)
+        with (
+            patch("zeitfenster.app._regenerate", new_callable=AsyncMock) as mock_regen,
+            patch(
+                "zeitfenster.booking_service.create_talk_room",
+                new_callable=AsyncMock,
+            ) as mock_create_talk_room,
+        ):
             response = client.post(
                 "/book",
                 data={
@@ -800,6 +892,7 @@ class TestBookEndpoint:
             )
         assert response.status_code == 400
         assert response.json()["detail"] == "Requested slot is not available"
+        mock_create_talk_room.assert_not_called()
         mock_send.assert_not_called()
         mock_regen.assert_not_called()
 

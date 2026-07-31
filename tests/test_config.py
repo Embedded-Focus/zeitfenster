@@ -47,6 +47,23 @@ email:
   owner: test@example.com
 """
 
+NEXTCLOUD_TALK_YAML = """\
+nextcloud_talk:
+  enabled: true
+  base_url: https://cloud.example.com
+  username_env: NEXTCLOUD_TALK_USER
+  app_password_env: NEXTCLOUD_TALK_APP_PASSWORD
+  room_name_template: "Meeting with {customer_name}"
+  room_description_template: |
+    Message from {customer_name}:
+    {customer_description}
+  room_password_env: NEXTCLOUD_TALK_ROOM_PASSWORD
+  required: true
+
+email:
+  owner: test@example.com
+"""
+
 FULL_YAML = """\
 branding:
   title: "Test Booking"
@@ -134,6 +151,9 @@ class TestMinimalConfig:
             assert cfg.booking.message_enabled is False
             assert cfg.booking.summary_template == "{customer_name}"
             assert cfg.booking.description_template == ""
+            assert cfg.nextcloud_talk.enabled is False
+            assert cfg.nextcloud_talk.base_url is None
+            assert cfg.nextcloud_talk.required is False
         finally:
             path.unlink()
 
@@ -464,6 +484,100 @@ email:
         )
         try:
             with pytest.raises(ValueError, match="captcha.wasm_url"):
+                AppConfig.from_yaml(path)
+        finally:
+            path.unlink()
+
+
+class TestNextcloudTalk:
+    def test_loads_nextcloud_talk_config(self):
+        path = _write_yaml(NEXTCLOUD_TALK_YAML)
+        try:
+            cfg = AppConfig.from_yaml(path)
+            assert cfg.nextcloud_talk.enabled is True
+            assert cfg.nextcloud_talk.base_url == "https://cloud.example.com"
+            assert cfg.nextcloud_talk.username_env == "NEXTCLOUD_TALK_USER"
+            assert cfg.nextcloud_talk.app_password_env == "NEXTCLOUD_TALK_APP_PASSWORD"
+            assert cfg.nextcloud_talk.room_name_template == (
+                "Meeting with {customer_name}"
+            )
+            assert "Message from {customer_name}" in (
+                cfg.nextcloud_talk.room_description_template or ""
+            )
+            assert (
+                cfg.nextcloud_talk.room_password_env == "NEXTCLOUD_TALK_ROOM_PASSWORD"
+            )
+            assert cfg.nextcloud_talk.required is True
+        finally:
+            path.unlink()
+
+    def test_reads_credentials_from_env(self, monkeypatch):
+        path = _write_yaml(NEXTCLOUD_TALK_YAML)
+        monkeypatch.setenv("NEXTCLOUD_TALK_USER", "talk-bot")
+        monkeypatch.setenv("NEXTCLOUD_TALK_APP_PASSWORD", "app-password")
+        monkeypatch.setenv("NEXTCLOUD_TALK_ROOM_PASSWORD", "room-secret")
+        try:
+            cfg = AppConfig.from_yaml(path)
+            assert cfg.nextcloud_talk.username == "talk-bot"
+            assert cfg.nextcloud_talk.app_password == "app-password"
+            assert cfg.nextcloud_talk.room_password == "room-secret"
+        finally:
+            path.unlink()
+
+    def test_missing_credentials_raise(self):
+        path = _write_yaml(NEXTCLOUD_TALK_YAML)
+        try:
+            cfg = AppConfig.from_yaml(path)
+            os.environ.pop("NEXTCLOUD_TALK_USER", None)
+            with pytest.raises(ValueError, match="NEXTCLOUD_TALK_USER"):
+                _ = cfg.nextcloud_talk.username
+        finally:
+            path.unlink()
+
+    def test_rejects_non_https_base_url_when_enabled(self):
+        path = _write_yaml(
+            """\
+nextcloud_talk:
+  enabled: true
+  base_url: http://cloud.example.com
+  username_env: NEXTCLOUD_TALK_USER
+  app_password_env: NEXTCLOUD_TALK_APP_PASSWORD
+email:
+  owner: test@example.com
+"""
+        )
+        try:
+            with pytest.raises(ValueError, match="https URL"):
+                AppConfig.from_yaml(path)
+        finally:
+            path.unlink()
+
+    def test_enabled_requires_connection_fields(self):
+        path = _write_yaml(
+            """\
+nextcloud_talk:
+  enabled: true
+email:
+  owner: test@example.com
+"""
+        )
+        try:
+            with pytest.raises(ValueError, match="base_url"):
+                AppConfig.from_yaml(path)
+        finally:
+            path.unlink()
+
+    def test_rejects_unknown_talk_template_fields(self):
+        path = _write_yaml(
+            """\
+nextcloud_talk:
+  room_name_template: "{calendar_name}"
+email:
+  owner: test@example.com
+"""
+        )
+        try:
+            with pytest.raises(ValueError, match="calendar_name"):
                 AppConfig.from_yaml(path)
         finally:
             path.unlink()

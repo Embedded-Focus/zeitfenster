@@ -71,6 +71,7 @@ def build_booking_ics(
     summary_template: str = "{customer_name}",
     location: str | None = None,
     description_template: str = "",
+    meeting_url: str | None = None,
 ) -> bytes:
     owner_email, parsed_owner_name = normalize_mailbox(owner_email)
     owner_display_name = owner_name or parsed_owner_name or owner_email
@@ -100,10 +101,12 @@ def build_booking_ics(
             customer_name=customer_name,
             customer_email=customer_email,
             customer_description=customer_description,
+            meeting_url=meeting_url or "",
         ),
     )
-    if location:
-        event.add("location", location)
+    event_location = location or meeting_url
+    if event_location:
+        event.add("location", event_location)
 
     organizer = vCalAddress(f"mailto:{owner_email}")
     organizer.params["cn"] = vText(owner_display_name)

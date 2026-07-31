@@ -135,6 +135,52 @@ class TestBuildBookingIcs:
         assert "Request from Alice at alice@example.com." in str(event["description"])
         assert "Meeting link already configured." in str(event["description"])
 
+    def test_meeting_url_is_used_as_location_when_no_static_location(self):
+        data = build_booking_ics(
+            owner_email="owner@example.com",
+            customer_name="Alice",
+            customer_email="alice@example.com",
+            start=datetime(2026, 7, 6, 10, 0, tzinfo=TZ),
+            end=datetime(2026, 7, 6, 11, 0, tzinfo=TZ),
+            meeting_url="https://cloud.example.com/call/abc123",
+        )
+        cal = Calendar.from_ical(data)
+        event = [c for c in cal.walk() if c.name == "VEVENT"][0]
+
+        assert event["location"] == "https://cloud.example.com/call/abc123"
+
+    def test_static_location_takes_priority_over_meeting_url(self):
+        data = build_booking_ics(
+            owner_email="owner@example.com",
+            customer_name="Alice",
+            customer_email="alice@example.com",
+            start=datetime(2026, 7, 6, 10, 0, tzinfo=TZ),
+            end=datetime(2026, 7, 6, 11, 0, tzinfo=TZ),
+            location="Room 4",
+            meeting_url="https://cloud.example.com/call/abc123",
+        )
+        cal = Calendar.from_ical(data)
+        event = [c for c in cal.walk() if c.name == "VEVENT"][0]
+
+        assert event["location"] == "Room 4"
+
+    def test_meeting_url_is_available_to_description_template(self):
+        data = build_booking_ics(
+            owner_email="owner@example.com",
+            customer_name="Alice",
+            customer_email="alice@example.com",
+            start=datetime(2026, 7, 6, 10, 0, tzinfo=TZ),
+            end=datetime(2026, 7, 6, 11, 0, tzinfo=TZ),
+            meeting_url="https://cloud.example.com/call/abc123",
+            description_template="Join: {meeting_url}",
+        )
+        cal = Calendar.from_ical(data)
+        event = [c for c in cal.walk() if c.name == "VEVENT"][0]
+
+        assert "Join: https://cloud.example.com/call/abc123" in str(
+            event["description"]
+        )
+
     def test_customer_description_is_available_to_description_template(self):
         data = build_booking_ics(
             owner_email="owner@example.com",

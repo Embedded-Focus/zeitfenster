@@ -144,11 +144,15 @@ Requirements:
 
 Copy `config.example.yaml` and adjust to your setup. Secrets (CalDAV passwords, SMTP credentials, federation tokens) are referenced by environment variable name, not stored in the config file.
 
-See `config.example.yaml` for all available options including working hours, slot durations, buffer, minimum notice, horizon, refresh interval, branding, and owner-side booking event text/location.
+See `config.example.yaml` for all available options including working hours, slot durations, buffer, minimum notice, horizon, refresh interval, branding, owner-side booking event text/location, and optional Nextcloud Talk room creation.
 
 The public page title is configured separately from generated calendar event text. Use `branding.title` for the booking page heading, and `booking.owner_name` plus `booking.summary_template` for the `.ics` event subject.
 
 Set `booking.message_enabled: true` to show an optional `Message` field on the public booking form. Messages are included in the owner notification email. They are only included in attached `.ics` files when `booking.description_template` explicitly uses `{customer_description}`, so enabling the field does not unexpectedly change calendar draft content.
+
+Set `nextcloud_talk.enabled: true` to create a public Nextcloud Talk room for accepted booking requests. Room creation happens only after CAPTCHA, slot validation, and booking rate limiting pass. The generated link is added to the owner notification email and is used as the draft `.ics` `LOCATION` when `booking.location` is not set. To also include it in the event body, add `{meeting_url}` to `booking.description_template`. If `nextcloud_talk.required: false`, bookings still succeed when Talk is unavailable and the email is sent without a generated link; with `required: true`, the booking returns `503` before email delivery.
+
+Nextcloud Talk credentials are referenced by environment variable name with `nextcloud_talk.username_env` and `nextcloud_talk.app_password_env`. `base_url` must use `https://`. Talk room passwords are opt-in: omit `nextcloud_talk.room_password_env` for passwordless client access to the generated room, and set it only if you explicitly want password-protected Talk rooms or your server requires them. Room descriptions are optional via `nextcloud_talk.room_description_template`; customer messages are only sent to Talk room metadata when that template includes `{customer_description}`.
 
 Owner notification emails use `email.from_name` as the display name for the SMTP sender, defaulting to `Zeitfenster <SMTP_USER>`.
 

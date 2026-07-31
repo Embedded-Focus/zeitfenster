@@ -73,9 +73,26 @@ availability:
 #   wasm_url: https://cap.example.com/assets/cap_wasm_bg.wasm
 #   secret_env: CAP_SECRET
 
+# Optional Nextcloud Talk integration for accepted booking requests.
+# Credentials stay in the internal Python backend and are only read from the
+# named environment vars. If required is false, booking emails are still sent
+# when room creation fails, just without a generated meeting link.
+# nextcloud_talk:
+#   enabled: true
+#   base_url: https://cloud.example.com
+#   username_env: NEXTCLOUD_TALK_USER
+#   app_password_env: NEXTCLOUD_TALK_APP_PASSWORD
+#   room_name_template: "Meeting with {customer_name}"
+#   room_description_template: "{customer_description}"
+#   # Optional; omit for passwordless client access.
+#   room_password_env: NEXTCLOUD_TALK_ROOM_PASSWORD
+#   required: false
+
 booking:
   # Optional location for the owner-side draft event. This can be a permanent
-  # meeting room URL, a physical location, or omitted for manual editing.
+  # meeting room URL, a physical location, or omitted for manual editing. When
+  # Nextcloud Talk creates a link and this value is omitted, the generated link
+  # is used as the event LOCATION.
   location: https://meet.example.com/my-room
   # Optional display name for the owner in generated calendar content.
   owner_name: "Jane Doe"
@@ -85,7 +102,8 @@ booking:
   # Available placeholders: {customer_name}, {customer_email}, {owner_name}, {owner_email}
   summary_template: "{customer_name} and {owner_name}"
   # Body text for the generated owner-side .ics event.
-  # Available placeholders: {customer_name}, {customer_email}, {customer_description}
+  # Available placeholders: {customer_name}, {customer_email}, {customer_description},
+  # {meeting_url}
   # Customer messages only appear in .ics files if this template includes
   # {customer_description}.
   description_template: ""

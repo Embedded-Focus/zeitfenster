@@ -62,6 +62,61 @@ async def test_booking_email_includes_customer_description_when_present(monkeypa
 
 
 @pytest.mark.asyncio
+async def test_booking_email_includes_meeting_url_when_present(monkeypatch):
+    monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
+    monkeypatch.setenv("SMTP_USER", "sender@example.com")
+    monkeypatch.setenv("SMTP_PASSWORD", "secret")
+    config = Email(owner="owner@example.com")
+
+    with patch("zeitfenster.email.aiosmtplib.send", new_callable=AsyncMock) as send:
+        await send_booking_email(
+            config=config,
+            customer_name="Alice",
+            customer_email="alice@example.com",
+            slot_summary="Monday, July 6 2026 10:00 - 11:00",
+            ics_data=b"BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n",
+            meeting_url="https://cloud.example.com/call/abc123",
+        )
+
+    message = send.call_args.args[0]
+    body = message.get_body(preferencelist=("plain",)).get_content()
+
+    assert "Meeting link: https://cloud.example.com/call/abc123" in body
+
+
+@pytest.mark.asyncio
+async def test_booking_email_uses_single_blank_line_before_meeting_url(monkeypatch):
+    monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
+    monkeypatch.setenv("SMTP_USER", "sender@example.com")
+    monkeypatch.setenv("SMTP_PASSWORD", "secret")
+    config = Email(owner="owner@example.com")
+
+    with patch("zeitfenster.email.aiosmtplib.send", new_callable=AsyncMock) as send:
+        await send_booking_email(
+            config=config,
+            customer_name="Alice",
+            customer_email="alice@example.com",
+            slot_summary="Monday, July 6 2026 10:00 - 11:00",
+            ics_data=b"BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n",
+            customer_description="Discuss launch plan.",
+            meeting_url="https://cloud.example.com/call/abc123",
+        )
+
+    message = send.call_args.args[0]
+    body = message.get_body(preferencelist=("plain",)).get_content()
+
+    assert (
+        "Description:\nDiscuss launch plan.\n\n"
+        "Meeting link: https://cloud.example.com/call/abc123\n\n"
+        "The attached .ics file"
+    ) in body
+    assert (
+        "Description:\nDiscuss launch plan.\n\n\n"
+        "Meeting link: https://cloud.example.com/call/abc123"
+    ) not in body
+
+
+@pytest.mark.asyncio
 async def test_booking_email_omits_empty_customer_description(monkeypatch):
     monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
     monkeypatch.setenv("SMTP_USER", "sender@example.com")

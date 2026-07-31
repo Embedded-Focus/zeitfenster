@@ -16,28 +16,34 @@ async def send_booking_email(
     slot_summary: str,
     ics_data: bytes,
     customer_description: str = "",
+    meeting_url: str | None = None,
 ) -> None:
     msg = EmailMessage()
     msg["Subject"] = f"Booking Request: {customer_name} – {slot_summary}"
     msg["From"] = formataddr((config.from_name, config.smtp_user))
     msg["To"] = ", ".join(config.owner_list)
 
-    description_block = (
-        f"\nDescription:\n{customer_description}\n" if customer_description else ""
+    sections = [
+        (
+            f"New booking request:\n\n"
+            f"Name: {customer_name}\n"
+            f"Email: {customer_email}\n"
+            f"Slot: {slot_summary}"
+        ),
+    ]
+    if customer_description:
+        sections.append(f"Description:\n{customer_description}")
+    if meeting_url:
+        sections.append(f"Meeting link: {meeting_url}")
+    sections.append(
+        "The attached .ics file is a draft event for your calendar.\n\n"
+        "1. Add the attached .ics file to your calendar.\n"
+        "2. Edit the added event, for example to adjust the description, "
+        "add meeting links, or add further attendees.\n"
+        "3. Save or send the updated event from your calendar client to "
+        "send the actual invitations to the attendees."
     )
-    msg.set_content(
-        f"New booking request:\n\n"
-        f"Name: {customer_name}\n"
-        f"Email: {customer_email}\n"
-        f"Slot: {slot_summary}\n"
-        f"{description_block}\n"
-        f"The attached .ics file is a draft event for your calendar.\n\n"
-        f"1. Add the attached .ics file to your calendar.\n"
-        f"2. Edit the added event, for example to adjust the description, "
-        f"add meeting links, or add further attendees.\n"
-        f"3. Save or send the updated event from your calendar client to "
-        f"send the actual invitations to the attendees."
-    )
+    msg.set_content("\n\n".join(sections))
 
     msg.add_attachment(
         ics_data,

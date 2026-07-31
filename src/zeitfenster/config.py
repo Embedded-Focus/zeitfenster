@@ -11,12 +11,22 @@ BOOKING_DESCRIPTION_TEMPLATE_FIELDS = {
     "customer_name",
     "customer_email",
     "customer_description",
+    "meeting_url",
 }
 BOOKING_SUMMARY_TEMPLATE_FIELDS = {
     "customer_name",
     "customer_email",
     "owner_name",
     "owner_email",
+}
+NEXTCLOUD_TALK_TEMPLATE_FIELDS = {
+    "customer_name",
+    "customer_email",
+    "customer_description",
+    "owner_name",
+    "owner_email",
+    "slot_start",
+    "slot_end",
 }
 
 
@@ -210,6 +220,92 @@ class Booking(BaseModel):
         )
 
 
+class NextcloudTalk(BaseModel):
+    enabled: bool = False
+    base_url: str | None = None
+    username_env: str | None = None
+    app_password_env: str | None = None
+    room_name_template: str = "Meeting with {customer_name}"
+    room_description_template: str | None = None
+    room_password_env: str | None = None
+    required: bool = False
+
+    @model_validator(mode="after")
+    def _validate_enabled_config(self) -> "NextcloudTalk":
+        if not self.enabled:
+            return self
+        missing = [
+            name
+            for name, value in (
+                ("base_url", self.base_url),
+                ("username_env", self.username_env),
+                ("app_password_env", self.app_password_env),
+            )
+            if not value
+        ]
+        if missing:
+            raise ValueError(
+                "nextcloud_talk requires these fields when enabled: "
+                + ", ".join(missing)
+            )
+        parsed = urlsplit(self.base_url or "")
+        if parsed.scheme != "https" or not parsed.netloc:
+            raise ValueError("nextcloud_talk.base_url must be an https URL")
+        return self
+
+    @field_validator("room_name_template")
+    @classmethod
+    def _validate_room_name_template(cls, value: str) -> str:
+        return _validate_template_fields(
+            value,
+            allowed_fields=NEXTCLOUD_TALK_TEMPLATE_FIELDS,
+        )
+
+    @field_validator("room_description_template")
+    @classmethod
+    def _validate_room_description_template(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _validate_template_fields(
+            value,
+            allowed_fields=NEXTCLOUD_TALK_TEMPLATE_FIELDS,
+        )
+
+    @property
+    def username(self) -> str:
+        if self.username_env is None:
+            raise ValueError("nextcloud_talk.username_env is not configured")
+        value = os.environ.get(self.username_env)
+        if not value:
+            raise ValueError(
+                f"Environment variable {self.username_env!r} is not set or is empty"
+            )
+        return value
+
+    @property
+    def app_password(self) -> str:
+        if self.app_password_env is None:
+            raise ValueError("nextcloud_talk.app_password_env is not configured")
+        value = os.environ.get(self.app_password_env)
+        if not value:
+            raise ValueError(
+                f"Environment variable {self.app_password_env!r} is not set or is empty"
+            )
+        return value
+
+    @property
+    def room_password(self) -> str | None:
+        if self.room_password_env is None:
+            return None
+        value = os.environ.get(self.room_password_env)
+        if not value:
+            raise ValueError(
+                f"Environment variable {self.room_password_env!r} "
+                "is not set or is empty"
+            )
+        return value
+
+
 class WorkingHours(BaseModel):
     mon: list[str] = []
     tue: list[str] = []
@@ -292,6 +388,7 @@ class AppConfig(BaseModel):
     federation: Federation = Federation()
     captcha: Captcha = Captcha()
     booking: Booking = Booking()
+    nextcloud_talk: NextcloudTalk = NextcloudTalk()
     rules: Rules = Rules()
     email: Email
 
