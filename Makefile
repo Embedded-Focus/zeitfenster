@@ -4,7 +4,7 @@ TAG             ?= 1.0.0
 UV_LINK_MODE    ?= copy
 .DEFAULT_GOAL   := help
 
-.PHONY: help install test lint build push up down logs sops-edit sops-decrypt sops-encrypt sops-updatekeys
+.PHONY: help install test lint pre-commit build push up down logs sops-edit sops-decrypt sops-encrypt sops-updatekeys
 
 install: ## Install dependencies
 	uv sync
@@ -14,6 +14,9 @@ test: ## Run tests
 
 lint: ## Run linter
 	uv run ruff check src/ tests/
+
+pre-commit: ## Run pre-commit hooks an all files
+	uv run pre-commit run --all-files
 
 build: ## Build OCI image with Podman
 	podman build --format oci --build-arg UV_LINK_MODE=$(UV_LINK_MODE) -t $(IMAGE):$(TAG) .
