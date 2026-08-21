@@ -32,10 +32,15 @@ availability:
     - url: https://radicale.example.com/user/family/
       username: family-reader
       password_env: FAMILY_PASSWORD
+      # Optional. Set to "basic" for Basic-auth servers such as Radicale when
+      # you want the first CalDAV request to include credentials instead of
+      # relying on a 401 authentication challenge.
+      auth_type: basic
 
     - url: https://radicale.example.com/user/work/
       username: work-reader
       password_env: WORK_PASSWORD
+      auth_type: basic
 
   # Read-only ICS URLs (e.g. Google Calendar "secret address in iCal format")
   # Google Calendar: Settings > pick calendar > "Secret address in iCal format"

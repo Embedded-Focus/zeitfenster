@@ -104,6 +104,38 @@ class TestValidateCaldavRedirect:
 
 
 class TestFetchBusyIntervalsRedirectHook:
+    def test_passes_calendar_auth_type_to_dav_client(self, monkeypatch):
+        monkeypatch.setenv("TEST_CALDAV_PASSWORD", "secret")
+        source = CalendarSource(
+            url="https://caldav.example.com/cal/",
+            username="reader",
+            password_env="TEST_CALDAV_PASSWORD",
+            auth_type="basic",
+        )
+
+        fake_session = SimpleNamespace(hooks={"response": []})
+        fake_calendar = MagicMock()
+        fake_calendar.search.return_value = []
+        fake_client = MagicMock()
+        fake_client.session = fake_session
+        fake_client.calendar.return_value = fake_calendar
+
+        with patch(
+            "zeitfenster.caldav_client.caldav.DAVClient", return_value=fake_client
+        ) as dav_client:
+            fetch_busy_intervals(
+                source,
+                datetime(2026, 7, 1, tzinfo=TZ),
+                datetime(2026, 7, 2, tzinfo=TZ),
+            )
+
+        dav_client.assert_called_once_with(
+            url="https://caldav.example.com/cal/",
+            username="reader",
+            password="secret",
+            auth_type="basic",
+        )
+
     def test_registers_redirect_hook_on_session(self, monkeypatch):
         monkeypatch.setenv("TEST_CALDAV_PASSWORD", "secret")
         source = CalendarSource(

@@ -81,6 +81,7 @@ availability:
     - url: https://caldav.example.com/cal1/
       username: reader1
       password_env: CAL1_PASSWORD
+      auth_type: basic
     - url: https://caldav.example.com/cal2/
       username: reader2
       password_env: CAL2_PASSWORD
@@ -176,6 +177,8 @@ class TestFullConfig:
                 cfg.availability.calendars[0].url == "https://caldav.example.com/cal1/"
             )
             assert cfg.availability.calendars[0].username == "reader1"
+            assert cfg.availability.calendars[0].auth_type == "basic"
+            assert cfg.availability.calendars[1].auth_type is None
             assert len(cfg.availability.ics_urls) == 1
             assert (
                 cfg.availability.ics_urls[0].url
@@ -243,6 +246,25 @@ email:
         )
         try:
             with pytest.raises(ValueError, match="at least one color"):
+                AppConfig.from_yaml(path)
+        finally:
+            path.unlink()
+
+    def test_rejects_unknown_calendar_auth_type(self):
+        path = _write_yaml(
+            """\
+availability:
+  calendars:
+    - url: https://caldav.example.com/cal/
+      username: reader
+      password_env: CALDAV_PASSWORD
+      auth_type: ntlm
+email:
+  owner: owner@example.com
+"""
+        )
+        try:
+            with pytest.raises(ValidationError, match="auth_type"):
                 AppConfig.from_yaml(path)
         finally:
             path.unlink()

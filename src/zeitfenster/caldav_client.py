@@ -92,6 +92,7 @@ def fetch_busy_intervals(
         url=source.url,
         username=source.username,
         password=source.password,
+        auth_type=source.auth_type,
     )
     client.session.hooks["response"].append(
         lambda response, **kwargs: _validate_caldav_redirect(

@@ -145,6 +145,12 @@ Copy `config.example.yaml` and adjust to your setup. Secrets (CalDAV passwords, 
 
 See `config.example.yaml` for all available options including working hours, slot durations, buffer, minimum notice, horizon, refresh interval, branding, owner-side booking event text/location, and optional Nextcloud Talk room creation.
 
+For CalDAV servers that use HTTP Basic authentication, set `auth_type: basic`
+on the calendar source. This makes Zeitfenster send credentials on the first
+CalDAV request and avoids normal-but-noisy `401 Unauthorized` challenge log
+entries on servers such as Radicale. Omit `auth_type` to keep the CalDAV
+library's default authentication negotiation.
+
 The public page title is configured separately from generated calendar event text. Use `branding.title` for the booking page heading, and `booking.owner_name` plus `booking.summary_template` for the `.ics` event subject.
 
 Set `booking.message_enabled: true` to show an optional `Message` field on the public booking form. Messages are included in the owner notification email. They are only included in attached `.ics` files when `booking.description_template` explicitly uses `{customer_description}`, so enabling the field does not unexpectedly change calendar draft content.

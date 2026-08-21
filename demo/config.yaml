@@ -30,10 +30,12 @@ availability:
     - url: http://radicale:5232/reader/work/
       username: reader
       password_env: CALDAV_PASSWORD
+      auth_type: basic
 
     - url: http://radicale:5232/reader/personal/
       username: reader
       password_env: CALDAV_PASSWORD
+      auth_type: basic
 
 # nextcloud_talk:
 #   enabled: false

@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 from string import Formatter
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import urlsplit
 
 import yaml
@@ -79,6 +79,7 @@ class CalendarSource(BaseModel):
     url: str
     username: str
     password_env: str
+    auth_type: Literal["basic", "digest", "bearer"] | None = None
 
     @property
     def password(self) -> str:
