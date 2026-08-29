@@ -7,6 +7,9 @@
 *Minimal, self-hosted appointment request service.*
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/Embedded-Focus/zeitfenster/actions/workflows/ci.yml/badge.svg)](https://github.com/Embedded-Focus/zeitfenster/actions/workflows/ci.yml)
+[![Security](https://github.com/Embedded-Focus/zeitfenster/actions/workflows/security.yml/badge.svg)](https://github.com/Embedded-Focus/zeitfenster/actions/workflows/security.yml)
+[![Dependabot](https://img.shields.io/badge/dependabot-enabled-025e8c?logo=dependabot)](https://github.com/Embedded-Focus/zeitfenster/security/dependabot)
 [![Python 3.14](https://img.shields.io/badge/Python-3.14-3776AB?logo=python&logoColor=white)](pyproject.toml)
 [![FastAPI](https://img.shields.io/badge/FastAPI-service-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Docker](https://img.shields.io/badge/Docker-supported-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
