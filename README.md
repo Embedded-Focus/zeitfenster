@@ -110,7 +110,6 @@ demo/                   Demo environment (Compose, Radicale config, sample calen
 Dockerfile              Multi-stage build
 Caddyfile               Caddy reverse proxy config
 compose.prod.yaml       Production Compose file (Caddy + app + Traefik labels)
-pod.yaml                Podman kube reference (production)
 config.example.yaml     Example configuration
 ```
 
