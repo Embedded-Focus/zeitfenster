@@ -147,7 +147,7 @@ class Captcha(BaseModel):
     secret_env: str | None = None
 
     @model_validator(mode="after")
-    def _validate_enabled_config(self) -> "Captcha":
+    def _validate_enabled_config(self) -> Captcha:
         if not self.enabled:
             return self
         if self.provider != "cap":
@@ -232,7 +232,7 @@ class NextcloudTalk(BaseModel):
     required: bool = False
 
     @model_validator(mode="after")
-    def _validate_enabled_config(self) -> "NextcloudTalk":
+    def _validate_enabled_config(self) -> NextcloudTalk:
         if not self.enabled:
             return self
         missing = [
@@ -339,7 +339,7 @@ class Email(BaseModel):
     smtp_use_tls: bool = False
 
     @model_validator(mode="after")
-    def _validate_tls_options(self) -> "Email":
+    def _validate_tls_options(self) -> Email:
         if self.smtp_use_tls and self.smtp_start_tls:
             raise ValueError(
                 "smtp_use_tls and smtp_start_tls are mutually exclusive; set "

@@ -3,8 +3,8 @@ from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, patch
 from zoneinfo import ZoneInfo
 
-import pytest
 import httpx2
+import pytest
 from fastapi.testclient import TestClient
 from icalendar import Calendar
 
@@ -365,9 +365,9 @@ class TestRefreshInterval:
             patch("zeitfenster.app.generate_placeholder"),
             patch("zeitfenster.app.generate_site"),
             pytest.raises(ValueError, match="refresh_interval"),
+            TestClient(app),
         ):
-            with TestClient(app):
-                pass
+            pass
 
 
 class TestStartupRegeneration:
@@ -558,7 +558,7 @@ class TestBookEndpoint:
         )
         ics_data = mock_send.call_args.kwargs["ics_data"]
         cal = Calendar.from_ical(ics_data)
-        event = [c for c in cal.walk() if c.name == "VEVENT"][0]
+        event = next(c for c in cal.walk() if c.name == "VEVENT")
         assert "I want to discuss the launch plan." in str(event["description"])
 
     @patch("zeitfenster.booking_service.create_talk_room", new_callable=AsyncMock)
@@ -586,7 +586,7 @@ class TestBookEndpoint:
         )
         ics_data = mock_send.call_args.kwargs["ics_data"]
         cal = Calendar.from_ical(ics_data)
-        event = [c for c in cal.walk() if c.name == "VEVENT"][0]
+        event = next(c for c in cal.walk() if c.name == "VEVENT")
         assert event["location"] == "https://cloud.example.com/call/abc123"
 
     @patch("zeitfenster.booking_service.create_talk_room", new_callable=AsyncMock)
@@ -654,7 +654,7 @@ class TestBookEndpoint:
         assert mock_send.call_args.kwargs["customer_description"] == ""
         ics_data = mock_send.call_args.kwargs["ics_data"]
         cal = Calendar.from_ical(ics_data)
-        event = [c for c in cal.walk() if c.name == "VEVENT"][0]
+        event = next(c for c in cal.walk() if c.name == "VEVENT")
         assert "Direct post message" not in str(event["description"])
 
     @patch("zeitfenster.booking_service.send_booking_email", new_callable=AsyncMock)
@@ -674,7 +674,7 @@ class TestBookEndpoint:
         assert response.status_code == 200
         ics_data = mock_send.call_args.kwargs["ics_data"]
         cal = Calendar.from_ical(ics_data)
-        event = [c for c in cal.walk() if c.name == "VEVENT"][0]
+        event = next(c for c in cal.walk() if c.name == "VEVENT")
         organizer = event["organizer"]
 
         assert str(organizer) == "mailto:jane.doe@example.com"

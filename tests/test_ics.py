@@ -1,11 +1,17 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import cast
 from zoneinfo import ZoneInfo
 
 from icalendar import Calendar
+from icalendar.cal import Event
 
 from zeitfenster.ics import build_booking_ics
 
 TZ = ZoneInfo("Europe/Vienna")
+
+
+def _event(cal: Calendar) -> Event:
+    return cast(Event, next(c for c in cal.walk() if c.name == "VEVENT"))
 
 
 class TestBuildBookingIcs:
@@ -35,9 +41,9 @@ class TestBuildBookingIcs:
         cal = Calendar.from_ical(data)
         events = [c for c in cal.walk() if c.name == "VEVENT"]
         assert len(events) == 1
-        event = events[0]
-        assert event["dtstart"].dt == start
-        assert event["dtend"].dt == end
+        event = _event(cal)
+        assert event.start == start
+        assert event.end == end
 
     def test_includes_vtimezone_for_local_timezone(self):
         data = build_booking_ics(
@@ -50,7 +56,7 @@ class TestBuildBookingIcs:
         text = data.decode()
         cal = Calendar.from_ical(data)
         timezones = [c for c in cal.walk() if c.name == "VTIMEZONE"]
-        event = [c for c in cal.walk() if c.name == "VEVENT"][0]
+        event = _event(cal)
 
         assert len(timezones) == 1
         assert str(timezones[0]["tzid"]) == "Europe/Vienna"
@@ -65,8 +71,8 @@ class TestBuildBookingIcs:
             owner_email="owner@example.com",
             customer_name="Alice",
             customer_email="alice@example.com",
-            start=datetime(2026, 7, 6, 10, 30, tzinfo=timezone.utc),
-            end=datetime(2026, 7, 6, 11, 0, tzinfo=timezone.utc),
+            start=datetime(2026, 7, 6, 10, 30, tzinfo=UTC),
+            end=datetime(2026, 7, 6, 11, 0, tzinfo=UTC),
         )
 
         assert "BEGIN:VTIMEZONE" not in data.decode()
@@ -80,12 +86,12 @@ class TestBuildBookingIcs:
             end=datetime(2026, 7, 6, 11, 0, tzinfo=TZ),
         )
         cal = Calendar.from_ical(data)
-        event = [c for c in cal.walk() if c.name == "VEVENT"][0]
+        event = _event(cal)
 
         organizer = event["organizer"]
         assert "owner@example.com" in str(organizer)
 
-        attendees = event["attendee"]
+        attendees = event.attendees
         assert len(attendees) == 2
 
         owner_attendee = next(
@@ -111,7 +117,7 @@ class TestBuildBookingIcs:
             end=datetime(2026, 7, 6, 11, 0, tzinfo=TZ),
         )
         cal = Calendar.from_ical(data)
-        event = [c for c in cal.walk() if c.name == "VEVENT"][0]
+        event = _event(cal)
 
         assert str(event["description"]) == ""
 
@@ -129,7 +135,7 @@ class TestBuildBookingIcs:
             ),
         )
         cal = Calendar.from_ical(data)
-        event = [c for c in cal.walk() if c.name == "VEVENT"][0]
+        event = _event(cal)
 
         assert event["location"] == "https://meet.example.com/room"
         assert "Request from Alice at alice@example.com." in str(event["description"])
@@ -145,7 +151,7 @@ class TestBuildBookingIcs:
             meeting_url="https://cloud.example.com/call/abc123",
         )
         cal = Calendar.from_ical(data)
-        event = [c for c in cal.walk() if c.name == "VEVENT"][0]
+        event = _event(cal)
 
         assert event["location"] == "https://cloud.example.com/call/abc123"
 
@@ -160,7 +166,7 @@ class TestBuildBookingIcs:
             meeting_url="https://cloud.example.com/call/abc123",
         )
         cal = Calendar.from_ical(data)
-        event = [c for c in cal.walk() if c.name == "VEVENT"][0]
+        event = _event(cal)
 
         assert event["location"] == "Room 4"
 
@@ -175,7 +181,7 @@ class TestBuildBookingIcs:
             description_template="Join: {meeting_url}",
         )
         cal = Calendar.from_ical(data)
-        event = [c for c in cal.walk() if c.name == "VEVENT"][0]
+        event = _event(cal)
 
         assert "Join: https://cloud.example.com/call/abc123" in str(
             event["description"]
@@ -192,7 +198,7 @@ class TestBuildBookingIcs:
             description_template="Message:\n{customer_description}",
         )
         cal = Calendar.from_ical(data)
-        event = [c for c in cal.walk() if c.name == "VEVENT"][0]
+        event = _event(cal)
 
         assert "Discuss launch plan." in str(event["description"])
 
@@ -207,7 +213,7 @@ class TestBuildBookingIcs:
             description_template="Request from {customer_name}",
         )
         cal = Calendar.from_ical(data)
-        event = [c for c in cal.walk() if c.name == "VEVENT"][0]
+        event = _event(cal)
 
         assert "Do not include this." not in str(event["description"])
 
@@ -222,7 +228,7 @@ class TestBuildBookingIcs:
             summary_template="{customer_name} and {owner_name}",
         )
         cal = Calendar.from_ical(data)
-        event = [c for c in cal.walk() if c.name == "VEVENT"][0]
+        event = _event(cal)
         assert str(event["summary"]) == "Alice and Jane Doe"
 
     def test_owner_attendee_uses_configured_owner_name(self):
@@ -235,10 +241,10 @@ class TestBuildBookingIcs:
             end=datetime(2026, 7, 6, 11, 0, tzinfo=TZ),
         )
         cal = Calendar.from_ical(data)
-        event = [c for c in cal.walk() if c.name == "VEVENT"][0]
+        event = _event(cal)
         owner_attendee = next(
             attendee
-            for attendee in event["attendee"]
+            for attendee in event.attendees
             if "owner@example.com" in str(attendee)
         )
         assert owner_attendee.params["CN"] == "Jane Doe"
@@ -253,7 +259,7 @@ class TestBuildBookingIcs:
             end=datetime(2026, 7, 6, 11, 0, tzinfo=TZ),
         )
         cal = Calendar.from_ical(data)
-        event = [c for c in cal.walk() if c.name == "VEVENT"][0]
+        event = _event(cal)
 
         assert event["organizer"].params["CN"] == "Jane Doe"
 
@@ -266,7 +272,7 @@ class TestBuildBookingIcs:
             end=datetime(2026, 7, 6, 11, 0, tzinfo=TZ),
         )
         cal = Calendar.from_ical(data)
-        event = [c for c in cal.walk() if c.name == "VEVENT"][0]
+        event = _event(cal)
 
         organizer = event["organizer"]
         assert str(organizer) == "mailto:jane.doe@example.com"
@@ -274,7 +280,7 @@ class TestBuildBookingIcs:
 
         owner_attendee = next(
             attendee
-            for attendee in event["attendee"]
+            for attendee in event.attendees
             if "jane.doe@example.com" in str(attendee)
         )
         assert str(owner_attendee) == "mailto:jane.doe@example.com"
@@ -290,7 +296,7 @@ class TestBuildBookingIcs:
             end=datetime(2026, 7, 6, 11, 0, tzinfo=TZ),
         )
         cal = Calendar.from_ical(data)
-        event = [c for c in cal.walk() if c.name == "VEVENT"][0]
+        event = _event(cal)
         assert str(event["summary"]) == "Alice"
 
     def test_uid_is_unique(self):
@@ -312,6 +318,6 @@ class TestBuildBookingIcs:
         )
         cal1 = Calendar.from_ical(data1)
         cal2 = Calendar.from_ical(data2)
-        ev1 = [c for c in cal1.walk() if c.name == "VEVENT"][0]
-        ev2 = [c for c in cal2.walk() if c.name == "VEVENT"][0]
+        ev1 = _event(cal1)
+        ev2 = _event(cal2)
         assert str(ev1["uid"]) != str(ev2["uid"])
