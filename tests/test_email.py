@@ -281,15 +281,17 @@ async def test_refuses_to_send_auth_over_unencrypted_connection(monkeypatch):
     config = Email(owner="owner@example.com")
     config.smtp_start_tls = False
 
-    with patch("zeitfenster.email.aiosmtplib.send", new_callable=AsyncMock) as send:
-        with pytest.raises(ValueError, match="unencrypted connection"):
-            await send_booking_email(
-                config=config,
-                customer_name="Alice",
-                customer_email="alice@example.com",
-                slot_summary="Monday, July 6 2026 10:00 - 11:00",
-                ics_data=b"BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n",
-            )
+    with (
+        patch("zeitfenster.email.aiosmtplib.send", new_callable=AsyncMock) as send,
+        pytest.raises(ValueError, match="unencrypted connection"),
+    ):
+        await send_booking_email(
+            config=config,
+            customer_name="Alice",
+            customer_email="alice@example.com",
+            slot_summary="Monday, July 6 2026 10:00 - 11:00",
+            ics_data=b"BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n",
+        )
 
     send.assert_not_called()
 

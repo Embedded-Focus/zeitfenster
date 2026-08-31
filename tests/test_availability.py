@@ -123,7 +123,6 @@ class TestComputeFreeSlots:
         )
         with patch("zeitfenster.availability.datetime") as mock_dt:
             mock_dt.now.return_value = fake_now
-            mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
             result = compute_free_slots([], config)
 
         assert "60m" in result
@@ -145,7 +144,6 @@ class TestComputeFreeSlots:
         ]
         with patch("zeitfenster.availability.datetime") as mock_dt:
             mock_dt.now.return_value = fake_now
-            mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
             result = compute_free_slots(busy, config)
 
         slots = result["60m"]
@@ -164,8 +162,8 @@ class TestComputeFreeSlots:
         )
         busy = [
             BusyInterval(
-                start=datetime(2026, 6, 29, 9, 0),
-                end=datetime(2026, 6, 29, 10, 0),
+                start=datetime(2026, 6, 29, 9, 0),  # noqa: DTZ001 (naive on purpose)
+                end=datetime(2026, 6, 29, 10, 0),  # noqa: DTZ001 (naive on purpose)
             ),
             BusyInterval(
                 start=datetime(2026, 6, 29, 8, 0, tzinfo=ZoneInfo("UTC")),
@@ -174,7 +172,6 @@ class TestComputeFreeSlots:
         ]
         with patch("zeitfenster.availability.datetime") as mock_dt:
             mock_dt.now.return_value = fake_now
-            mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
             result = compute_free_slots(busy, config)
 
         slot_starts = [s.start.hour for s in result["60m"]]
@@ -198,7 +195,6 @@ class TestComputeFreeSlots:
         ]
         with patch("zeitfenster.availability.datetime") as mock_dt:
             mock_dt.now.return_value = fake_now
-            mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
             result = compute_free_slots(busy, config)
 
         slots = result["30m"]
@@ -221,7 +217,6 @@ class TestComputeFreeSlots:
         )
         with patch("zeitfenster.availability.datetime") as mock_dt:
             mock_dt.now.return_value = fake_now
-            mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
             result = compute_free_slots([], config)
 
         slots = result["60m"]
@@ -238,7 +233,6 @@ class TestComputeFreeSlots:
         )
         with patch("zeitfenster.availability.datetime") as mock_dt:
             mock_dt.now.return_value = fake_now
-            mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
             result = compute_free_slots([], config)
 
         assert len(result["30m"]) == 4  # 09:00, 09:30, 10:00, 10:30
@@ -254,7 +248,6 @@ class TestComputeFreeSlots:
         )
         with patch("zeitfenster.availability.datetime") as mock_dt:
             mock_dt.now.return_value = fake_now
-            mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
             result = compute_free_slots([], config)
 
         slots = result["60m"]
@@ -272,7 +265,6 @@ class TestComputeFreeSlots:
         )
         with patch("zeitfenster.availability.datetime") as mock_dt:
             mock_dt.now.return_value = fake_now
-            mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
             result = compute_free_slots([], config)
 
         assert result["60m"] == []

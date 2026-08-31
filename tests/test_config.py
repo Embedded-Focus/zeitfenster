@@ -7,7 +7,6 @@ from pydantic import ValidationError
 
 from zeitfenster.config import AppConfig, Email, IcsUrlSource
 
-
 MINIMAL_YAML = """\
 email:
   owner: test@example.com
@@ -121,9 +120,8 @@ email:
 
 
 def _write_yaml(content: str) -> Path:
-    f = tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False)
-    f.write(content)
-    f.close()
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+        f.write(content)
     return Path(f.name)
 
 
