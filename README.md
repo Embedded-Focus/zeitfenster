@@ -65,7 +65,7 @@ Zeitfenster is designed around a small public surface and a secret-free frontend
 - **Secret isolation:** Caddy serves static files and proxies selected requests, but does not receive CalDAV or SMTP credentials. Those stay in the internal Python app container.
 - **SMTP auth is independent of STARTTLS, and never sent unencrypted:** `email.smtp_use_auth` (default `true`) controls whether SMTP credentials are sent, separately from `email.smtp_start_tls`. Previously, disabling STARTTLS silently disabled auth too; now the two are decoupled, so turning off STARTTLS no longer has the side effect of also sending unauthenticated mail. A startup warning is logged whenever STARTTLS is disabled, since booking emails (customer name, email, slot time) then go out in plaintext. That decoupling also opened a gap — auth with no encryption at all — so `smtp_use_auth` now requires `smtp_start_tls` or `smtp_use_tls` to be enabled; this is enforced at config load (the invalid combination can't even be constructed) and defensively re-checked immediately before the SMTP call itself.
 - **Implicit TLS (SMTPS) supported:** `email.smtp_use_tls` (default `false`, typically port `465`) is available as an alternative to STARTTLS. The two are mutually exclusive connection-security modes; enabling both is rejected at config load.
-- **Unprivileged runtime:** the Python app container runs as a dedicated non-root user (fixed uid/gid `10001`), not root. `/site` is owned by that user so the shared `site-data` volume works without privilege escalation; bind-mounted config files must stay world-readable or be chowned to uid `10001` accordingly.
+- **Unprivileged runtime:** the Python app container runs as a dedicated non-root user (fixed uid/gid `10001`), not root. `/site` is owned by that user so the shared `site-data` volume works without privilege escalation; bind-mounted config files must stay world-readable or be chowned to uid `10001` accordingly (see [Rootless Podman](#rootless-podman) for the caveat on host UID mapping).
 - **No database or sessions:** state is derived from configuration, calendar reads, generated static files, and in-memory availability.
 - **Bounded booking input:** booking form fields are normalized and size-limited before use. Names reject control characters, and customer email addresses are checked for a valid basic shape with a dotted domain. The generated form mirrors key limits with native browser validation.
 - **Booking slot validation:** `POST /book` does not trust submitted hidden form fields by themselves. The backend parses timezone-aware datetimes, requires `slot_end > slot_start`, checks that the posted duration is configured and matches the submitted range, and requires `(duration, slot_start, slot_end)` to exactly match a currently advertised slot in memory.
@@ -352,6 +352,17 @@ The default image is `registry.example.com/zeitfenster/zeitfenster:1.0.0`. Overr
 make build TAG=1.0.1
 make push IMAGE=registry.example.com/zeitfenster/zeitfenster TAG=1.0.1
 ```
+
+### Rootless Podman
+
+The app image is suitable for rootless Podman as-is: it already runs as a fixed non-root user (uid/gid `10001`), listens on the unprivileged port `8000`, and needs no added capabilities. `caddy:2-alpine` also works unmodified — binding to port 80 happens inside the container's own user namespace, and rootless Podman's port forwarding (e.g. `8080:80` in `demo/compose.yaml`) doesn't require host root either.
+
+The one thing that needs operator attention is bind-mounted host files — `/etc/zeitfenster/config.yaml`, `/etc/zeitfenster/static`, or the demo's `./config.yaml`. Rootless Podman remaps container UIDs through `/etc/subuid`, so a host file chowned to the literal UID `10001` will usually **not** line up with what the container sees as UID `10001` — that mapping only holds under rootful Docker/Podman. For rootless Podman, do one of:
+
+- Make the bind-mounted files world-readable (`chmod o+r`) — the simplest option, safe for config files that hold no secrets directly (secrets are referenced by env var name, not embedded in the YAML).
+- Run the container with `--userns=keep-id` (or the Compose/Quadlet equivalent) so container UID `10001` maps 1:1 to the invoking host user, and chown the files to that host user.
+
+The `site-data` named volume needs no such adjustment — Podman performs the ownership copy-up itself, consistent with whatever UID mapping the container uses.
 
 ## Development
 
