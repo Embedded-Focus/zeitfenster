@@ -26,3 +26,42 @@ updates:
       github-actions:
         patterns:
           - "*"
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:30"
+      timezone: Europe/Vienna
+    open-pull-requests-limit: 5
+    groups:
+      dockerfile-images:
+        patterns:
+          - "*"
+
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:45"
+      timezone: Europe/Vienna
+    open-pull-requests-limit: 5
+    groups:
+      production-container-images:
+        patterns:
+          - "*"
+
+  - package-ecosystem: docker-compose
+    directory: /demo
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: Europe/Vienna
+    open-pull-requests-limit: 5
+    groups:
+      demo-container-images:
+        patterns:
+          - "*"
