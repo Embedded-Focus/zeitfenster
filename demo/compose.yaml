@@ -1,6 +1,6 @@
 services:
   caddy:
-    image: caddy:2-alpine
+    image: caddy:2-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b
     ports:
       - "8080:80"
     volumes:
@@ -32,7 +32,7 @@ services:
       - "8000"
 
   radicale:
-    image: tomsquest/docker-radicale:latest
+    image: tomsquest/docker-radicale:latest@sha256:419e0c005b63bd475d50f73c5e7ff2b1f04924edb94af525fa86faed213c632a
     volumes:
       - ./radicale/config:/config/config:ro
       - ./radicale/users:/config/users:ro
@@ -43,7 +43,7 @@ services:
       - "5232"
 
   init-calendars:
-    image: curlimages/curl:latest
+    image: curlimages/curl:latest@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777
     volumes:
       - ./init-calendars.sh:/init-calendars.sh:ro
     entrypoint: ["/bin/sh", "/init-calendars.sh"]
@@ -53,7 +53,7 @@ services:
       - backend
 
   mailpit:
-    image: axllent/mailpit:latest
+    image: axllent/mailpit:latest@sha256:ed9b00c609e77e99c79b93f1178255ebc271868920f2c69a8d166bd5634ed10d
     ports:
       - "8025:8025"
     networks:
