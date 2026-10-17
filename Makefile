@@ -26,7 +26,7 @@ audit: ## Audit locked dependencies
 build: ## Build OCI image with Podman
 	podman build --format oci --build-arg UV_LINK_MODE=$(UV_LINK_MODE) -t $(IMAGE):$(TAG) .
 
-push: ## Push OCI image with Podman
+push: build ## Push OCI image with Podman
 	podman push $(IMAGE):$(TAG)
 
 up: ## Start demo environment
