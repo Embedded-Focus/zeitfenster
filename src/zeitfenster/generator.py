@@ -71,7 +71,11 @@ def generate_site(
         "slots_by_duration": template_data,
     }
 
-    tmp_dir = Path(tempfile.mkdtemp(prefix="zeitfenster_"))
+    # Stage inside output_dir so _atomic_swap can use renames: /tmp and a
+    # mounted site dir are different filesystems, which turns shutil.move
+    # into a non-atomic copytree after the swap already emptied output_dir.
+    output_dir.mkdir(parents=True, exist_ok=True)
+    tmp_dir = Path(tempfile.mkdtemp(prefix=".zeitfenster_", dir=output_dir))
     try:
         index_template = env.get_template("index.html.j2")
         (tmp_dir / "index.html").write_text(index_template.render(**context))
@@ -100,7 +104,8 @@ def generate_placeholder(
     output_dir = Path(output_dir)
     env = _build_template_env()
 
-    tmp_dir = Path(tempfile.mkdtemp(prefix="zeitfenster_"))
+    output_dir.mkdir(parents=True, exist_ok=True)
+    tmp_dir = Path(tempfile.mkdtemp(prefix=".zeitfenster_", dir=output_dir))
     try:
         template = env.get_template("placeholder.html.j2")
         (tmp_dir / "index.html").write_text(
@@ -141,8 +146,11 @@ def _copy_custom_static(
 
 def _atomic_swap(src: Path, dest: Path) -> None:
     dest.mkdir(parents=True, exist_ok=True)
+    staging = src.resolve()
 
     for item in dest.iterdir():
+        if item.resolve() == staging:
+            continue
         if item.is_dir():
             shutil.rmtree(item)
         else:

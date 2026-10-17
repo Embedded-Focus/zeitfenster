@@ -1,3 +1,4 @@
+import os
 import re
 import shutil
 import tempfile
@@ -9,7 +10,7 @@ import pytest
 
 from zeitfenster.availability import FreeSlot
 from zeitfenster.config import AppConfig
-from zeitfenster.generator import generate_placeholder, generate_site
+from zeitfenster.generator import _atomic_swap, generate_placeholder, generate_site
 
 TZ = ZoneInfo("Europe/Vienna")
 
@@ -329,6 +330,67 @@ class TestGenerateSite:
             html = (Path(tmp) / "index.html").read_text()
             assert "Generating availability" not in html
             assert "09:00" in html
+
+    def test_staging_dir_lives_inside_output_dir(self, monkeypatch):
+        # A separate temp dir would cross mount points on containerized
+        # deployments and force shutil.move into its non-atomic copytree
+        # fallback, so staging must be created inside output_dir instead.
+        config = _make_config()
+        with tempfile.TemporaryDirectory() as tmp:
+            staging_parents = []
+            real_mkdtemp = tempfile.mkdtemp
+
+            def recording_mkdtemp(*args, **kwargs):
+                staging_parents.append(kwargs.get("dir"))
+                return real_mkdtemp(*args, **kwargs)
+
+            monkeypatch.setattr(tempfile, "mkdtemp", recording_mkdtemp)
+            generate_placeholder(config, tmp)
+
+            assert staging_parents == [Path(tmp)]
+            assert (Path(tmp) / "index.html").exists()
+            leftovers = [
+                p for p in Path(tmp).iterdir() if p.name.startswith(".zeitfenster")
+            ]
+            assert leftovers == []
+
+    def test_atomic_swap_skips_nested_staging_dir(self):
+        # The purge loop must not delete the staging source when it is
+        # nested inside dest, otherwise the swap silently erases the site.
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = Path(tmp) / "site"
+            dest.mkdir()
+            (dest / "old.html").write_text("old")
+            staging = Path(tempfile.mkdtemp(prefix=".zeitfenster_", dir=dest))
+            (staging / "new.html").write_text("new")
+            (staging / "static").mkdir()
+            (staging / "static" / "app.js").write_text("x")
+
+            _atomic_swap(staging, dest)
+
+            assert not (dest / "old.html").exists()
+            assert (dest / "new.html").read_text() == "new"
+            assert (dest / "static" / "app.js").exists()
+            assert not staging.exists()
+
+    def test_atomic_swap_uses_successful_renames_from_output_dir(self, monkeypatch):
+        config = _make_config()
+        calls = []
+        real_rename = os.rename
+
+        def counting_rename(src, dst):
+            result = real_rename(src, dst)
+            calls.append((Path(src), Path(dst)))
+            return result
+
+        monkeypatch.setattr("os.rename", counting_rename)
+        with tempfile.TemporaryDirectory() as tmp:
+            generate_site(_make_fake_slots(), config, tmp)
+
+            assert len(calls) == 3
+            assert all(
+                src.parent.parent == dst.parent == Path(tmp) for src, dst in calls
+            )
 
 
 class TestVisualPreview:
