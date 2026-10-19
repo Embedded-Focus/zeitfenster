@@ -162,8 +162,8 @@ class TestComputeFreeSlots:
         )
         busy = [
             BusyInterval(
-                start=datetime(2026, 6, 29, 9, 0),  # noqa: DTZ001 (naive on purpose)
-                end=datetime(2026, 6, 29, 10, 0),  # noqa: DTZ001 (naive on purpose)
+                start=datetime(2026, 6, 29, 9, 0),
+                end=datetime(2026, 6, 29, 10, 0),
             ),
             BusyInterval(
                 start=datetime(2026, 6, 29, 8, 0, tzinfo=ZoneInfo("UTC")),
