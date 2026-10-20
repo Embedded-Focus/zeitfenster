@@ -4,7 +4,7 @@ TAG             ?= 1.2.3
 UV_LINK_MODE    ?= copy
 .DEFAULT_GOAL   := help
 
-.PHONY: help install test lint pre-commit check audit build push up down logs sops-edit sops-decrypt sops-encrypt sops-updatekeys
+.PHONY: help install test lint check-format pre-commit check audit build push up down logs sops-edit sops-decrypt sops-encrypt sops-updatekeys
 
 install: ## Install dependencies
 	uv sync
@@ -13,7 +13,11 @@ test: ## Run tests
 	uv run pytest
 
 lint: ## Run linter
-	uv run ruff check src/ tests/
+	uv run ruff check $(LINT_ARGS)
+
+check-format: RUFF_FORMAT_ARGS ?= --check
+check-format:
+	uv run ruff format $(RUFF_FORMAT_ARGS)
 
 pre-commit: ## Run pre-commit hooks an all files
 	uv run pre-commit run --all-files
