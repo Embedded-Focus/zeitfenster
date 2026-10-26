@@ -1,6 +1,6 @@
 services:
   caddy:
-    image: caddy:2-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
+    image: caddy:2-alpine@sha256:eb4d35b7452d1ab6171fbdbe8d9275b2301dad6dad92115d91e19fb9b24d510f
     ports:
       - "8080:80"
     volumes:
@@ -43,7 +43,7 @@ services:
       - "5232"
 
   init-calendars:
-    image: curlimages/curl:latest@sha256:a134550be58ab783810e613ae96fd253c38f7bdd16d9bf9be350700c7a29ac06
+    image: curlimages/curl:latest@sha256:11e64e28c5f58c8d93ee95fcf22ac055f48b0bc440e0ce7d8013bbb5ad6aa8ac
     volumes:
       - ./init-calendars.sh:/init-calendars.sh:ro
     entrypoint: ["/bin/sh", "/init-calendars.sh"]
@@ -53,7 +53,7 @@ services:
       - backend
 
   mailpit:
-    image: axllent/mailpit:latest@sha256:23fe39e81bde596a918000b3135c0f85dc8bb4c9ea6be274b051143f3e300387
+    image: axllent/mailpit:latest@sha256:0790692be935ea4420d085694f7985b1f692ca6a8771ab0e0bd8ba75ac180498
     ports:
       - "8025:8025"
     networks:
