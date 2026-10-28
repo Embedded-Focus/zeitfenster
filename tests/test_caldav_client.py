@@ -170,3 +170,56 @@ class TestFetchBusyIntervalsRedirectHook:
         )
         with pytest.raises(ValueError, match="Refusing to follow"):
             hook(bad_response)
+
+
+class TestFetchBusyIntervalsSessionCleanup:
+    """Sessions must be closed, not left for garbage collection."""
+
+    @staticmethod
+    def _source(monkeypatch) -> CalendarSource:
+        monkeypatch.setenv("TEST_CALDAV_PASSWORD", "secret")
+        return CalendarSource(
+            url="https://caldav.example.com/cal/",
+            username="reader",
+            password_env="TEST_CALDAV_PASSWORD",
+        )
+
+    def test_closes_session_after_successful_fetch(self, monkeypatch):
+        fake_calendar = MagicMock()
+        fake_calendar.search.return_value = []
+        fake_client = MagicMock()
+        fake_client.session = SimpleNamespace(hooks={"response": []})
+        fake_client.calendar.return_value = fake_calendar
+
+        with patch(
+            "zeitfenster.caldav_client.caldav.DAVClient", return_value=fake_client
+        ):
+            intervals = fetch_busy_intervals(
+                self._source(monkeypatch),
+                datetime(2026, 7, 1, tzinfo=TZ),
+                datetime(2026, 7, 2, tzinfo=TZ),
+            )
+
+        assert intervals == []
+        fake_client.close.assert_called_once()
+
+    def test_closes_session_when_the_request_fails(self, monkeypatch):
+        fake_calendar = MagicMock()
+        fake_calendar.search.side_effect = OSError("connection reset")
+        fake_client = MagicMock()
+        fake_client.session = SimpleNamespace(hooks={"response": []})
+        fake_client.calendar.return_value = fake_calendar
+
+        with (
+            pytest.raises(OSError),
+            patch(
+                "zeitfenster.caldav_client.caldav.DAVClient", return_value=fake_client
+            ),
+        ):
+            fetch_busy_intervals(
+                self._source(monkeypatch),
+                datetime(2026, 7, 1, tzinfo=TZ),
+                datetime(2026, 7, 2, tzinfo=TZ),
+            )
+
+        fake_client.close.assert_called_once()

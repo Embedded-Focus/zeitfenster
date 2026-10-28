@@ -94,20 +94,28 @@ def fetch_busy_intervals(
         password=source.password,
         auth_type=source.auth_type,
     )
-    client.session.hooks["response"].append(
-        lambda response, **kwargs: _validate_caldav_redirect(
-            original_host, original_scheme, response, **kwargs
+    try:
+        client.session.hooks["response"].append(
+            lambda response, **kwargs: _validate_caldav_redirect(
+                original_host, original_scheme, response, **kwargs
+            )
         )
-    )
-    calendar = client.calendar(url=source.url)
-    events = calendar.search(
-        start=range_start,
-        end=range_end,
-        event=True,
-        expand=True,
-    )
-    intervals: list[BusyInterval] = []
-    for event in events:
-        intervals.extend(_extract_busy_intervals(event, range_start.tzinfo))
+        calendar = client.calendar(url=source.url)
+        events = calendar.search(
+            start=range_start,
+            end=range_end,
+            event=True,
+            expand=True,
+        )
+        intervals: list[BusyInterval] = []
+        for event in events:
+            intervals.extend(_extract_busy_intervals(event, range_start.tzinfo))
+    finally:
+        # The session pools a keep-alive connection per calendar. Leaving it
+        # open keeps sockets around until the session is garbage collected or
+        # the server reaps them, which is what the network layer logs as
+        # failing shutdowns on every refresh cycle.
+        client.close()
+
     logger.info("fetched_events", url=source.url, count=len(intervals))
     return intervals
