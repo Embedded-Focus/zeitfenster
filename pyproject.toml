@@ -1,6 +1,6 @@
 [project]
 name = "zeitfenster"
-version = "1.2.4"
+version = "1.2.5"
 description = "Minimal, self-hosted appointment booking service using CalDAV"
 readme = "README.md"
 license = "MIT"
