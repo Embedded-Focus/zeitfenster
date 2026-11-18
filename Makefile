@@ -1,6 +1,6 @@
 SERVICE_CREDS   ?= .env
 IMAGE           ?= registry.example.com/zeitfenster/zeitfenster
-TAG             ?= 1.2.3
+TAG             ?= 1.2.4
 UV_LINK_MODE    ?= copy
 .DEFAULT_GOAL   := help
 
