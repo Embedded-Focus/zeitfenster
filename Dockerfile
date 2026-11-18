@@ -29,6 +29,7 @@ COPY --from=builder --chown=zeitfenster:zeitfenster /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH"
 
 COPY --chown=zeitfenster:zeitfenster src/ src/
+COPY --chown=zeitfenster:zeitfenster docker/entrypoint.sh /entrypoint.sh
 
 # Sanity check: the copied venv must work with this stage's interpreter. Run
 # the real entry point, the way the CMD does. A builder/runtime mismatch
@@ -43,4 +44,7 @@ USER zeitfenster
 
 EXPOSE 8000
 
+# Back off before exiting on failure; podman kube play restarts failed
+# containers immediately and would spin the CPU on a crash loop.
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["uvicorn", "zeitfenster.app:app", "--host", "0.0.0.0", "--port", "8000"]
